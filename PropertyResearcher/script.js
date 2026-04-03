@@ -34,15 +34,53 @@ function distanceMiles(lat1, lon1, lat2, lon2) {
 }
 
 function developmentType(tags = {}) {
-  return tags.construction || tags.building || tags.landuse || tags.proposed || "Unknown";
+  const rawType =
+    tags["building:use"] ||
+    tags.construction ||
+    tags.proposed ||
+    tags["construction:building"] ||
+    tags.building ||
+    null;
+
+  if (!rawType) {
+    return "Not listed";
+  }
+
+  const normalized = String(rawType).toLowerCase();
+  if (["yes", "no", "construction"].includes(normalized)) {
+    return "Not listed";
+  }
+
+  return rawType;
 }
 
 function developmentSize(tags = {}) {
-  return tags["building:levels"] || tags.height || tags.area || "Not listed";
+  const units = tags["residential:units"] || tags.units || tags["building:flats"];
+  if (units) {
+    return `${units} units`;
+  }
+
+  const floorArea = tags["building:floor_area"] || tags.area || tags["gross_floor_area"];
+  if (!floorArea) {
+    return "Not listed";
+  }
+
+  const text = String(floorArea).trim().toLowerCase();
+  const numeric = Number.parseFloat(text.replace(/[^0-9.]/g, ""));
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return String(floorArea);
+  }
+
+  if (text.includes("m2") || text.includes("sqm") || text.includes("sq m")) {
+    const squareFeet = Math.round(numeric * 10.7639);
+    return `~${squareFeet.toLocaleString()} sq ft (estimated)`;
+  }
+
+  return `~${Math.round(numeric).toLocaleString()} sq ft (estimated)`;
 }
 
 function completionDate(tags = {}) {
-  return tags.opening_date || tags.opening_hours || tags.completion_date || tags.end_date || "Not listed";
+  return tags.opening_date || tags.completion_date || tags.end_date || "Not listed";
 }
 
 function developmentAddress(tags = {}) {
@@ -90,7 +128,7 @@ function isBuildingDevelopment(tags = {}) {
     return false;
   }
 
-  if ((tags.shop || tags.amenity) && !Boolean(tags.construction) && !Boolean(tags.proposed)) {
+  if (tags.shop || tags.amenity || tags.tourism || tags.leisure) {
     return false;
   }
 
@@ -143,7 +181,7 @@ function renderDevelopments(items, stateName, lat, lon) {
       return `<li>
         <strong>${name}</strong><br />
         Address: ${address}<br />
-        Type: ${type} • Size: ${size} • Estimated completion: ${completion} • ${miles}<br />
+        Type: ${type} • Estimated size: ${size} • Estimated completion: ${completion} • ${miles}<br />
         <a href="${searchLink(newsQuery)}" target="_blank" rel="noopener noreferrer">Related news search</a>
       </li>`;
     })
