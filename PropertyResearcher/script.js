@@ -128,10 +128,6 @@ function isBuildingDevelopment(tags = {}) {
     return false;
   }
 
-  if (tags.shop || tags.amenity || tags.tourism || tags.leisure) {
-    return false;
-  }
-
   return true;
 }
 
@@ -159,7 +155,7 @@ function renderDevelopments(items, stateName, lat, lon) {
       };
     })
     .sort((a, b) => (a.milesAway ?? 999) - (b.milesAway ?? 999))
-    .slice(0, 8);
+    .slice(0, 15);
 
   if (topItems.length === 0) {
     developmentResults.innerHTML =
@@ -208,22 +204,34 @@ async function fetchNearbyDevelopments(lat, lon, stateName) {
     out center tags;
   `;
 
-  try {
-    const response = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-      body: `data=${encodeURIComponent(overpassQuery)}`,
-    });
+  const overpassEndpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
+  ];
 
-    if (!response.ok) {
-      throw new Error(`Overpass API ${response.status}`);
+  let lastError = null;
+  for (const endpoint of overpassEndpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        body: `data=${encodeURIComponent(overpassQuery)}`,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Overpass API ${response.status}`);
+      }
+
+      const payload = await response.json();
+      renderDevelopments(payload.elements || [], stateName, lat, lon);
+      return;
+    } catch (error) {
+      lastError = error;
     }
-
-    const payload = await response.json();
-    renderDevelopments(payload.elements || [], stateName, lat, lon);
-  } catch (error) {
-    developmentResults.innerHTML = `<strong>Nearby Development Activity</strong><p>Unable to load development data right now (${error.message}).</p>`;
   }
+
+  developmentResults.innerHTML = `<strong>Nearby Development Activity</strong><p>Unable to load development data right now (${lastError?.message || "unknown error"}).</p>`;
 }
 
 function renderCountyLinks({ countyName, stateName, latitude, longitude, fullQuery }) {
