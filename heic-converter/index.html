@@ -96,13 +96,17 @@
       <ul id="output"></ul>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
     <script>
       const dropzone = document.getElementById('dropzone');
       const fileInput = document.getElementById('fileInput');
       const pick = document.getElementById('pick');
       const status = document.getElementById('status');
       const output = document.getElementById('output');
+      const HEIC2ANY_CDN_URLS = [
+        'https://cdn.jsdelivr.net/npm/heic2any/dist/heic2any.min.js',
+        'https://unpkg.com/heic2any/dist/heic2any.min.js'
+      ];
+      let heic2AnyLoadPromise = null;
 
       const setStatus = (message, isError = false) => {
         status.textContent = message;
@@ -112,6 +116,39 @@
       const formatErrorMessage = (error) => {
         const message = error && typeof error.message === 'string' ? error.message.trim() : '';
         return message || 'Unknown error';
+      };
+
+      const loadScript = (src) => new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.head.appendChild(script);
+      });
+
+      const ensureHeic2AnyLoaded = async () => {
+        if (typeof heic2any === 'function') {
+          return heic2any;
+        }
+
+        if (!heic2AnyLoadPromise) {
+          heic2AnyLoadPromise = (async () => {
+            for (const url of HEIC2ANY_CDN_URLS) {
+              try {
+                await loadScript(url);
+                if (typeof heic2any === 'function') {
+                  return heic2any;
+                }
+              } catch (error) {
+                // Try next CDN URL
+              }
+            }
+            throw new Error('Unable to load HEIC conversion library from CDN');
+          })();
+        }
+
+        return heic2AnyLoadPromise;
       };
 
       const HEIC_MIME_TYPES = new Set([
@@ -191,15 +228,13 @@
       };
 
       const convertWithHeic2Any = async (file) => {
-        if (typeof heic2any !== 'function') {
-          throw new Error('heic2any library failed to load');
-        }
+        const heic2anyFn = await ensureHeic2AnyLoaded();
 
         const heicBlob = await normalizeHeicBlob(file);
         if (heicBlob.type === 'image/avif') {
           throw new Error('AVIF container detected; this converter currently supports HEIC/HEIF only');
         }
-        const convertedBlob = await heic2any({
+        const convertedBlob = await heic2anyFn({
           blob: heicBlob,
           toType: 'image/jpeg',
           quality: 0.92
@@ -247,6 +282,7 @@
         }
 
         setStatus(`Converting ${heicFiles.length} file(s)...`);
+        ensureHeic2AnyLoaded().catch(() => {});
 
         try {
           for (const file of heicFiles) {
