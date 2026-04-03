@@ -45,6 +45,20 @@ function completionDate(tags = {}) {
   return tags.opening_date || tags.opening_hours || tags.completion_date || tags.end_date || "Not listed";
 }
 
+function developmentAddress(tags = {}) {
+  const number = tags["addr:housenumber"] || "";
+  const street = tags["addr:street"] || "";
+  const city = tags["addr:city"] || "";
+  const state = tags["addr:state"] || "";
+  const postalCode = tags["addr:postcode"] || "";
+
+  const line1 = `${number} ${street}`.trim();
+  const line2 = [city, state, postalCode].filter(Boolean).join(" ");
+  const full = [line1, line2].filter(Boolean).join(", ");
+
+  return full || "Not listed";
+}
+
 function renderDevelopments(items, stateName, lat, lon) {
   if (!Array.isArray(items) || items.length === 0) {
     developmentResults.innerHTML =
@@ -74,11 +88,13 @@ function renderDevelopments(items, stateName, lat, lon) {
       const type = developmentType(tags);
       const size = developmentSize(tags);
       const completion = completionDate(tags);
+      const address = developmentAddress(tags);
       const miles = item.milesAway ? `${item.milesAway.toFixed(2)} mi away` : "distance unavailable";
       const newsQuery = `${name} ${stateName} development news`;
 
       return `<li>
         <strong>${name}</strong><br />
+        Address: ${address}<br />
         Type: ${type} • Size: ${size} • Estimated completion: ${completion} • ${miles}<br />
         <a href="${searchLink(newsQuery)}" target="_blank" rel="noopener noreferrer">Related news search</a>
       </li>`;
