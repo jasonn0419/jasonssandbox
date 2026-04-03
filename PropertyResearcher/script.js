@@ -34,46 +34,15 @@ function distanceMiles(lat1, lon1, lat2, lon2) {
 }
 
 function developmentType(tags = {}) {
-  const rawType =
-    tags["building:use"] ||
-    tags.construction ||
-    tags.proposed ||
-    tags["construction:building"] ||
-    tags.building ||
-    null;
-
-  if (!rawType) {
-    return "Not listed";
-  }
-
-  const normalized = String(rawType).toLowerCase();
-  if (["yes", "no", "construction"].includes(normalized)) {
-    return "Not listed";
-  }
-
-  return rawType;
+  return tags.construction || tags.building || tags.landuse || tags.proposed || "Unknown";
 }
 
 function developmentSize(tags = {}) {
-  const levels = tags["building:levels"];
-  const height = tags.height;
-  const floorArea = tags["building:floor_area"] || tags.area;
-
-  if (levels) {
-    return `${levels} levels`;
-  }
-  if (height) {
-    return String(height);
-  }
-  if (floorArea) {
-    return String(floorArea);
-  }
-
-  return "Not listed";
+  return tags["building:levels"] || tags.height || tags.area || "Not listed";
 }
 
 function completionDate(tags = {}) {
-  return tags.opening_date || tags.completion_date || tags.end_date || "Not listed";
+  return tags.opening_date || tags.opening_hours || tags.completion_date || tags.end_date || "Not listed";
 }
 
 function developmentAddress(tags = {}) {
@@ -121,7 +90,7 @@ function isBuildingDevelopment(tags = {}) {
     return false;
   }
 
-  if (tags.shop || tags.amenity || tags.tourism || tags.leisure) {
+  if ((tags.shop || tags.amenity) && !Boolean(tags.construction) && !Boolean(tags.proposed)) {
     return false;
   }
 

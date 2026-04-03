@@ -132,15 +132,50 @@
         return new Blob([bytes], { type: mimeType });
       };
 
-      const convertFile = async (file) => {
+      const blobToJpegWithCanvas = async (blob) => {
+        const bitmap = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+
+        const context = canvas.getContext('2d');
+        if (!context) {
+          bitmap.close();
+          throw new Error('Canvas context unavailable.');
+        }
+        context.drawImage(bitmap, 0, 0);
+        bitmap.close();
+
+        return new Promise((resolve, reject) => {
+          canvas.toBlob((jpgBlob) => {
+            if (jpgBlob) {
+              resolve(jpgBlob);
+              return;
+            }
+            reject(new Error('Canvas export failed.'));
+          }, 'image/jpeg', 0.92);
+        });
+      };
+
+      const convertWithHeic2Any = async (file) => {
         const heicBlob = await normalizeHeicBlob(file);
         const convertedBlob = await heic2any({
           blob: heicBlob,
           toType: 'image/jpeg',
-          quality: 0.9
+          quality: 0.92
         });
+        return Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+      };
 
-        const jpgBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+      const convertFile = async (file) => {
+        let jpgBlob;
+
+        try {
+          jpgBlob = await blobToJpegWithCanvas(file);
+        } catch (nativeError) {
+          jpgBlob = await convertWithHeic2Any(file);
+        }
+
         const link = document.createElement('a');
         const baseName = file.name.replace(/\.(heic|heif)$/i, '');
 
@@ -169,10 +204,6 @@
 
         setStatus(`Converting ${heicFiles.length} file(s)...`);
 
-        if (window.location.protocol === 'file:') {
-          setStatus('Tip: if conversion fails, run this page from a local server instead of file://', true);
-        }
-
         try {
           for (const file of heicFiles) {
             await convertFile(file);
@@ -180,7 +211,7 @@
           setStatus('Done! Click a download link below.');
         } catch (error) {
           console.error(error);
-          setStatus('Conversion failed. Try serving the page over http://localhost and use a .heic/.heif file.', true);
+          setStatus('Conversion failed for this file. Try a different HEIC/HEIF image.', true);
         }
       };
 
