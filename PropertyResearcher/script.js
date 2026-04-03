@@ -17,19 +17,7 @@ function searchLink(query) {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
-function findParcelNumber(geoResult) {
-  const possible = [
-    geoResult?.extratags?.parcel_number,
-    geoResult?.extratags?.parcel,
-    geoResult?.extratags?.ref,
-    geoResult?.extratags?.["ref:parcel"],
-    geoResult?.extratags?.["parcel:id"],
-  ].filter(Boolean);
-
-  return possible.length > 0 ? possible[0] : null;
-}
-
-function renderCountyLinks({ countyName, stateName, latitude, longitude, fullQuery, parcelNumber }) {
+function renderCountyLinks({ countyName, stateName, latitude, longitude, fullQuery }) {
   const countyWebsite = searchLink(`${countyName} County ${stateName} official county website`);
   const propertyAppraiser = searchLink(`${countyName} County ${stateName} property appraiser official`);
   const countyClerk = searchLink(`${countyName} County ${stateName} clerk of court official`);
@@ -48,9 +36,6 @@ function renderCountyLinks({ countyName, stateName, latitude, longitude, fullQue
       <li><a href="${streetViewHintLink}" target="_blank" rel="noopener noreferrer">Open Address in Google Maps (Street View if available)</a></li>
     </ul>
     <p><strong>Geo-code coordinates:</strong> ${latitude}, ${longitude}</p>
-    <p><strong>Parcel number:</strong> ${
-      parcelNumber ?? "Not available from geocoder. Please check the county assessor/appraiser site."
-    }</p>
   `;
 }
 
@@ -63,7 +48,7 @@ async function lookupCounty() {
 
   countyResult.textContent = "Looking up county...";
 
-  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&extratags=1&limit=1&countrycodes=us&q=${encodeURIComponent(
+  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&countrycodes=us&q=${encodeURIComponent(
     query
   )}`;
 
@@ -99,7 +84,6 @@ async function lookupCounty() {
       latitude: topResult.lat,
       longitude: topResult.lon,
       fullQuery: query,
-      parcelNumber: findParcelNumber(topResult),
     });
   } catch (error) {
     countyResult.textContent = `Lookup failed: ${error.message}`;
