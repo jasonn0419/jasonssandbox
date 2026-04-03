@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HEIC to JPG Converter</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(160deg, #f7fafc, #ebf4ff);
+      }
+
+      .container {
+        width: min(680px, 92vw);
+        background: #ffffff;
+        border-radius: 14px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+        padding: 1.5rem;
+      }
+
+      h1 {
+        margin: 0 0 0.5rem;
+      }
+
+      p {
+        margin-top: 0;
+        color: #4a5568;
+      }
+
+      #dropzone {
+        border: 2px dashed #718096;
+        border-radius: 12px;
+        padding: 2rem 1rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+      }
+
+      #dropzone.dragging {
+        border-color: #2b6cb0;
+        background: #ebf8ff;
+      }
+
+      #pick {
+        margin-top: 1rem;
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem 1rem;
+        background: #2b6cb0;
+        color: white;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+
+      #status {
+        margin-top: 1rem;
+        min-height: 1.4rem;
+        font-weight: 600;
+      }
+
+      #output {
+        margin-top: 1rem;
+        padding-left: 1.25rem;
+      }
+
+      #output li {
+        margin-bottom: 0.6rem;
+      }
+
+      #output a {
+        color: #2b6cb0;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <h1>HEIC to JPG Converter</h1>
+      <p>Drop HEIC files below (or click to choose) to convert them to JPG in your browser.</p>
+
+      <section id="dropzone" aria-label="HEIC dropzone">
+        <strong>Drag & drop HEIC files here</strong>
+        <div>or</div>
+        <button id="pick" type="button">Choose files</button>
+        <input id="fileInput" type="file" accept=".heic,image/heic" multiple hidden />
+      </section>
+
+      <div id="status" aria-live="polite"></div>
+      <ul id="output"></ul>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/heic2any/dist/heic2any.min.js"></script>
+    <script>
+      const dropzone = document.getElementById('dropzone');
+      const fileInput = document.getElementById('fileInput');
+      const pick = document.getElementById('pick');
+      const status = document.getElementById('status');
+      const output = document.getElementById('output');
+
+      const setStatus = (message, isError = false) => {
+        status.textContent = message;
+        status.style.color = isError ? '#c53030' : '#2d3748';
+      };
+
+      const isHeicFile = (file) => {
+        const name = file.name.toLowerCase();
+        return file.type === 'image/heic' || name.endsWith('.heic') || name.endsWith('.heif');
+      };
+
+      const convertFile = async (file) => {
+        const convertedBlob = await heic2any({
+          blob: file,
+          toType: 'image/jpeg',
+          quality: 0.9
+        });
+
+        const jpgBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+        const link = document.createElement('a');
+        const baseName = file.name.replace(/\.(heic|heif)$/i, '');
+
+        link.href = URL.createObjectURL(jpgBlob);
+        link.download = `${baseName || 'converted'}.jpg`;
+        link.textContent = `Download ${link.download}`;
+
+        const item = document.createElement('li');
+        item.appendChild(link);
+        output.appendChild(item);
+      };
+
+      const handleFiles = async (fileList) => {
+        const files = Array.from(fileList || []);
+        if (!files.length) {
+          setStatus('No files selected.', true);
+          return;
+        }
+
+        output.innerHTML = '';
+        const heicFiles = files.filter(isHeicFile);
+        if (!heicFiles.length) {
+          setStatus('Please choose HEIC or HEIF files only.', true);
+          return;
+        }
+
+        setStatus(`Converting ${heicFiles.length} file(s)...`);
+
+        try {
+          for (const file of heicFiles) {
+            await convertFile(file);
+          }
+          setStatus('Done! Click a download link below.');
+        } catch (error) {
+          console.error(error);
+          setStatus('Conversion failed. The file might be unsupported.', true);
+        }
+      };
+
+      dropzone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        dropzone.classList.add('dragging');
+      });
+
+      dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('dragging');
+      });
+
+      dropzone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        dropzone.classList.remove('dragging');
+        handleFiles(event.dataTransfer.files);
+      });
+
+      dropzone.addEventListener('click', () => fileInput.click());
+      pick.addEventListener('click', (event) => {
+        event.stopPropagation();
+        fileInput.click();
+      });
+
+      fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+    </script>
+  </body>
+</html>

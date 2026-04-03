@@ -2,6 +2,7 @@ const locationLookup = document.getElementById("locationLookup");
 const lookupBtn = document.getElementById("lookupBtn");
 const countyResult = document.getElementById("countyResult");
 const developmentResults = document.getElementById("developmentResults");
+
 function countyNameFromAddress(address = {}) {
   return address.county || address.city_district || address.state_district || null;
 }
@@ -54,28 +55,21 @@ function developmentType(tags = {}) {
 }
 
 function developmentSize(tags = {}) {
-  const units = tags["residential:units"] || tags.units || tags["building:flats"];
-  if (units) {
-    return `${units} units`;
-  }
+  const levels = tags["building:levels"];
+  const height = tags.height;
+  const floorArea = tags["building:floor_area"] || tags.area;
 
-  const floorArea = tags["building:floor_area"] || tags.area || tags["gross_floor_area"];
-  if (!floorArea) {
-    return "Not listed";
+  if (levels) {
+    return `${levels} levels`;
   }
-
-  const text = String(floorArea).trim().toLowerCase();
-  const numeric = Number.parseFloat(text.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(numeric) || numeric <= 0) {
+  if (height) {
+    return String(height);
+  }
+  if (floorArea) {
     return String(floorArea);
   }
 
-  if (text.includes("m2") || text.includes("sqm") || text.includes("sq m")) {
-    const squareFeet = Math.round(numeric * 10.7639);
-    return `~${squareFeet.toLocaleString()} sq ft (estimated)`;
-  }
-
-  return `~${Math.round(numeric).toLocaleString()} sq ft (estimated)`;
+  return "Not listed";
 }
 
 function completionDate(tags = {}) {
@@ -96,39 +90,17 @@ function developmentAddress(tags = {}) {
   return full || "Not listed";
 }
 
-function parseYear(value) {
-  if (!value) {
-    return null;
-  }
-  const match = String(value).match(/(19|20)\d{2}/);
-  return match ? Number.parseInt(match[0], 10) : null;
-}
-
-function isUnderConstruction(tags = {}) {
+function isBuildingDevelopment(tags = {}) {
+  const constructionValue = String(tags.construction || "").toLowerCase();
   const buildingValue = String(tags.building || "").toLowerCase();
+  const proposedValue = String(tags.proposed || "").toLowerCase();
   const landuseValue = String(tags.landuse || "").toLowerCase();
-  return (
+  const developmentSignal =
     buildingValue === "construction" ||
     landuseValue === "construction" ||
     Boolean(tags.construction) ||
     Boolean(tags.proposed) ||
-    Boolean(tags["construction:building"])
-  );
-}
-
-function isRecentlyCompleted(tags = {}) {
-  const year =
-    parseYear(tags.opening_date) || parseYear(tags.completion_date) || parseYear(tags.end_date) || null;
-  if (!year) {
-    return false;
-  }
-  const currentYear = new Date().getFullYear();
-  return year >= currentYear - 3;
-}
-
-function isBuildingDevelopment(tags = {}) {
-  const constructionValue = String(tags.construction || "").toLowerCase();
-  const landuseValue = String(tags.landuse || "").toLowerCase();
+    Boolean(tags["construction:building"]);
   const roadLikeSignals = [
     "road",
     "highway",
@@ -139,35 +111,9 @@ function isBuildingDevelopment(tags = {}) {
     "junction",
     "intersection",
   ];
-  const proposedValue = String(tags.proposed || "").toLowerCase();
   const combinedTypeText = `${constructionValue} ${proposedValue} ${landuseValue}`.trim();
-  const nameText = String(tags.name || "").toLowerCase();
-  const descriptionText = String(tags.description || "").toLowerCase();
-  const projectLikeNameSignals = [
-    "project",
-    "development",
-    "apartments",
-    "residences",
-    "condo",
-    "tower",
-    "mixed",
-    "plaza",
-    "square",
-    "center",
-    "hotel",
-  ];
-  const projectLikeName = projectLikeNameSignals.some(
-    (token) => nameText.includes(token) || descriptionText.includes(token)
-  );
-  const broadDevelopmentSignal =
-    isUnderConstruction(tags) ||
-    isRecentlyCompleted(tags) ||
-    projectLikeName ||
-    Boolean(tags["building:use"]) ||
-    landuseValue === "residential" ||
-    landuseValue === "commercial";
 
-  if (!broadDevelopmentSignal) {
+  if (!developmentSignal) {
     return false;
   }
 
@@ -175,21 +121,7 @@ function isBuildingDevelopment(tags = {}) {
     return false;
   }
 
-  return true;
-}
-
-function isLooseDevelopmentMatch(tags = {}) {
-  const name = String(tags.name || "").trim();
-  if (!name) {
-    return false;
-  }
-
-  const roadTerms = ["road", "highway", "intersection", "bridge", "sidewalk", "rail"];
-  const combined = `${tags.name || ""} ${tags.description || ""} ${tags.construction || ""} ${tags.proposed || ""}`
-    .toLowerCase()
-    .trim();
-
-  if (tags.highway || roadTerms.some((term) => combined.includes(term))) {
+  if (tags.shop || tags.amenity || tags.tourism || tags.leisure) {
     return false;
   }
 
@@ -205,7 +137,8 @@ function renderDevelopments(items, stateName, lat, lon) {
 
   const topItems = items
     .filter((item) => {
-      return isLooseDevelopmentMatch(item?.tags || {});
+      const name = item?.tags?.name?.trim();
+      return Boolean(name) && isBuildingDevelopment(item?.tags || {});
     })
     .map((item) => {
       const itemLat = item.lat ?? item.center?.lat;
@@ -219,11 +152,11 @@ function renderDevelopments(items, stateName, lat, lon) {
       };
     })
     .sort((a, b) => (a.milesAway ?? 999) - (b.milesAway ?? 999))
-    .slice(0, 15);
+    .slice(0, 8);
 
   if (topItems.length === 0) {
     developmentResults.innerHTML =
-      "<strong>Nearby Development Activity</strong><p>No named nearby development records were returned from the public map dataset.</p>";
+      "<strong>Nearby Development Activity</strong><p>No named building-development records were returned from the public map dataset.</p>";
     return;
   }
 
@@ -235,14 +168,13 @@ function renderDevelopments(items, stateName, lat, lon) {
       const size = developmentSize(tags);
       const completion = completionDate(tags);
       const address = developmentAddress(tags);
-      const status = isUnderConstruction(tags) ? "Under construction" : "Recently completed";
       const miles = item.milesAway ? `${item.milesAway.toFixed(2)} mi away` : "distance unavailable";
       const newsQuery = `${name} ${stateName} development news`;
 
       return `<li>
         <strong>${name}</strong><br />
         Address: ${address}<br />
-        Status: ${status} • Type: ${type} • Estimated size: ${size} • Estimated completion: ${completion} • ${miles}<br />
+        Type: ${type} • Size: ${size} • Estimated completion: ${completion} • ${miles}<br />
         <a href="${searchLink(newsQuery)}" target="_blank" rel="noopener noreferrer">Related news search</a>
       </li>`;
     })
@@ -265,42 +197,26 @@ async function fetchNearbyDevelopments(lat, lon, stateName) {
       nwr(around:${radiusMeters},${lat},${lon})["landuse"="construction"];
       nwr(around:${radiusMeters},${lat},${lon})["construction"];
       nwr(around:${radiusMeters},${lat},${lon})["proposed"];
-      nwr(around:${radiusMeters},${lat},${lon})["opening_date"];
-      nwr(around:${radiusMeters},${lat},${lon})["completion_date"];
-      nwr(around:${radiusMeters},${lat},${lon})["end_date"];
-      nwr(around:${radiusMeters},${lat},${lon})["name"~"project|development|apartments|residences|condo|tower|mixed|plaza|square|center|hotel",i];
     );
     out center tags;
   `;
 
-  const overpassEndpoints = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://lz4.overpass-api.de/api/interpreter",
-  ];
+  try {
+    const response = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: `data=${encodeURIComponent(overpassQuery)}`,
+    });
 
-  let lastError = null;
-  for (const endpoint of overpassEndpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-        body: `data=${encodeURIComponent(overpassQuery)}`,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Overpass API ${response.status}`);
-      }
-
-      const payload = await response.json();
-      renderDevelopments(payload.elements || [], stateName, lat, lon);
-      return;
-    } catch (error) {
-      lastError = error;
+    if (!response.ok) {
+      throw new Error(`Overpass API ${response.status}`);
     }
-  }
 
-  developmentResults.innerHTML = `<strong>Nearby Development Activity</strong><p>Unable to load development data right now (${lastError?.message || "unknown error"}).</p>`;
+    const payload = await response.json();
+    renderDevelopments(payload.elements || [], stateName, lat, lon);
+  } catch (error) {
+    developmentResults.innerHTML = `<strong>Nearby Development Activity</strong><p>Unable to load development data right now (${error.message}).</p>`;
+  }
 }
 
 function renderCountyLinks({ countyName, stateName, latitude, longitude, fullQuery }) {
