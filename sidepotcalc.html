@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Side Pot Calculator</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #fff;
+      --text: #182230;
+      --muted: #5c6778;
+      --primary: #2f62ff;
+      --border: #dbe3f0;
+      --error: #b42318;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1rem;
+      box-shadow: 0 8px 24px rgba(24, 34, 48, 0.08);
+    }
+
+    h1 {
+      margin: 0 0 .35rem;
+      font-size: clamp(1.3rem, 2.4vw, 1.8rem);
+    }
+
+    .help {
+      margin: 0 0 1rem;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+
+    .players-wrap {
+      margin: .75rem 0;
+      display: grid;
+      gap: .65rem;
+    }
+
+    .player-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: .5rem;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: .6rem;
+      background: #fafcff;
+    }
+
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: .65rem .75rem;
+      font: inherit;
+    }
+
+    .all-in {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .player-controls {
+      display: flex;
+      gap: .5rem;
+      margin: .6rem 0 .2rem;
+      flex-wrap: wrap;
+    }
+
+    .player-controls button {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      border-radius: 8px;
+      padding: .45rem .7rem;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .error {
+      color: var(--error);
+      min-height: 1.2rem;
+      font-weight: 600;
+      margin-top: .25rem;
+    }
+
+    .results {
+      margin-top: .75rem;
+      border-top: 1px solid var(--border);
+      padding-top: .75rem;
+    }
+
+    .pot {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: .6rem .7rem;
+      margin: .45rem 0;
+      background: #fbfdff;
+    }
+
+    @media (max-width: 620px) {
+      .player-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <section class="card">
+      <h1>Side Pot Calculator</h1>
+      <p class="help">Start with 4 players. Use Add/Remove to adjust player count (up to 8 players).</p>
+
+      <div id="playersWrap" class="players-wrap"></div>
+      <div class="player-controls">
+        <button id="addPlayerBtn" type="button">Add Player</button>
+        <button id="removePlayerBtn" type="button">Remove Player</button>
+      </div>
+
+      <div id="error" class="error" role="alert"></div>
+
+      <div class="results">
+        <h2>Pots</h2>
+        <div id="pots"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const playersWrap = document.getElementById('playersWrap');
+    const addPlayerBtn = document.getElementById('addPlayerBtn');
+    const removePlayerBtn = document.getElementById('removePlayerBtn');
+    const errorBox = document.getElementById('error');
+    const potsOutput = document.getElementById('pots');
+    const MAX_PLAYERS = 8;
+    const MIN_PLAYERS = 2;
+
+    function createPlayerRow(index) {
+      const row = document.createElement('div');
+      row.className = 'player-row';
+      row.innerHTML = `<input type=\"text\" data-role=\"name\" value=\"Player ${index}\" /><input type=\"number\" min=\"0\" step=\"0.01\" data-role=\"bet\" placeholder=\"Bet amount\" /><label class=\"all-in\"><input type=\"checkbox\" data-role=\"allin\" /> All-in</label>`;
+      return row;
+    }
+
+    function syncPlayerLabels() {
+      [...playersWrap.querySelectorAll('.player-row')].forEach((row, idx) => {
+        const nameInput = row.querySelector('[data-role=\"name\"]');
+        if (!nameInput.value.trim() || /^Player\\s+\\d+$/i.test(nameInput.value.trim())) {
+          nameInput.value = `Player ${idx + 1}`;
+        }
+      });
+    }
+
+    function parsePlayers() {
+      const rows = [...playersWrap.querySelectorAll('.player-row')];
+
+      return rows.map((row, idx) => {
+        const name = row.querySelector('[data-role="name"]').value.trim() || `Player ${idx + 1}`;
+        const rawBet = row.querySelector('[data-role="bet"]').value.trim();
+        const bet = rawBet === '' ? 0 : Number(rawBet);
+        const allIn = row.querySelector('[data-role="allin"]').checked;
+
+        if (!Number.isFinite(bet) || bet < 0) {
+          throw new Error(`Invalid amount for ${name}.`);
+        }
+
+        return { name, bet, allIn };
+      });
+    }
+
+    function calculateSidePots(players) {
+      const active = players.filter(p => p.bet > 0);
+      const sortedLevels = [...new Set(active.map(p => p.bet))].sort((a, b) => a - b);
+      const pots = [];
+      let previous = 0;
+
+      for (const level of sortedLevels) {
+        const layer = level - previous;
+        const eligible = active.filter(p => p.bet >= level);
+        const amount = layer * eligible.length;
+
+        if (amount > 0) {
+          pots.push({
+            amount,
+            eligible: eligible.map(p => ({
+              name: p.name,
+              allIn: p.allIn,
+              contribution: layer
+            }))
+          });
+        }
+        previous = level;
+      }
+
+      return pots;
+    }
+
+    function renderResults(pots) {
+      if (!pots.length) {
+        potsOutput.innerHTML = '<p>Enter at least one bet amount to calculate pots.</p>';
+        return;
+      }
+
+      const furthestAllInPotByName = {};
+      pots.forEach((pot, potIndex) => {
+        pot.eligible.forEach(player => {
+          if (player.allIn) {
+            furthestAllInPotByName[player.name] = potIndex;
+          }
+        });
+      });
+
+      potsOutput.innerHTML = '';
+      pots.forEach((pot, index) => {
+        const item = document.createElement('div');
+        item.className = 'pot';
+        const playersText = pot.eligible.map(player => {
+          const allInTag = player.allIn && furthestAllInPotByName[player.name] === index ? ' (All-in)' : '';
+          return `${player.name}${allInTag} (${player.contribution.toFixed(2)})`;
+        }).join(', ');
+        item.innerHTML = `
+          <strong>Pot ${index + 1}:</strong> $${pot.amount.toFixed(2)}
+          <br><strong>Eligible players:</strong> ${playersText}
+        `;
+        potsOutput.appendChild(item);
+      });
+    }
+
+    function runCalculation() {
+      errorBox.textContent = '';
+      try {
+        const players = parsePlayers();
+        const pots = calculateSidePots(players);
+        renderResults(pots);
+      } catch (err) {
+        potsOutput.innerHTML = '';
+        errorBox.textContent = err.message || 'Could not calculate pots.';
+      }
+    }
+
+    playersWrap.addEventListener('input', runCalculation);
+    playersWrap.addEventListener('change', runCalculation);
+
+    addPlayerBtn.addEventListener('click', () => {
+      const count = playersWrap.querySelectorAll('.player-row').length;
+      if (count >= MAX_PLAYERS) return;
+      playersWrap.appendChild(createPlayerRow(count + 1));
+      runCalculation();
+    });
+
+    removePlayerBtn.addEventListener('click', () => {
+      const rows = playersWrap.querySelectorAll('.player-row');
+      if (rows.length <= MIN_PLAYERS) return;
+      rows[rows.length - 1].remove();
+      syncPlayerLabels();
+      runCalculation();
+    });
+
+    for (let i = 1; i <= 4; i += 1) {
+      playersWrap.appendChild(createPlayerRow(i));
+    }
+    runCalculation();
+  </script>
+</body>
+</html>

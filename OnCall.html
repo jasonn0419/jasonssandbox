@@ -1,0 +1,1052 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>On Call Schedule</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 1.5rem;
+      }
+
+      h1,
+      h2 {
+        margin-top: 0;
+      }
+
+      .card {
+        background: #111827;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.75rem;
+      }
+
+      .employee-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.5rem;
+        align-items: end;
+      }
+
+      .count-pill {
+        white-space: nowrap;
+        font-size: 0.78rem;
+        padding: 0.45rem 0.55rem;
+        border-radius: 999px;
+        border: 1px solid #475569;
+        background: #0b1220;
+        color: #cbd5e1;
+      }
+
+      label {
+        display: block;
+        font-size: 0.875rem;
+        margin-bottom: 0.25rem;
+      }
+
+      input,
+      select,
+      button {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 8px;
+        border: 1px solid #475569;
+        background: #1e293b;
+        color: #e2e8f0;
+        padding: 0.55rem 0.65rem;
+      }
+
+      .inline-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 0.6rem;
+        align-items: end;
+      }
+
+      button {
+        border: none;
+        background: #2563eb;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #1d4ed8;
+      }
+
+      .actions {
+        margin-top: 0.8rem;
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+      }
+
+      .actions button {
+        width: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        text-align: left;
+        border-bottom: 1px solid #334155;
+        padding: 0.55rem 0.5rem;
+        vertical-align: top;
+      }
+
+      .small {
+        font-size: 0.85rem;
+        color: #cbd5e1;
+      }
+
+      .tag {
+        font-size: 0.75rem;
+        color: #facc15;
+      }
+
+      .error {
+        color: #fca5a5;
+        min-height: 1.25rem;
+      }
+
+      .type-picker {
+        position: relative;
+      }
+
+      .type-picker details {
+        border: 1px solid #475569;
+        background: #1e293b;
+        border-radius: 8px;
+        padding: 0.45rem 0.6rem;
+      }
+
+      .type-picker summary {
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .type-picker summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .type-options {
+        margin-top: 0.5rem;
+        display: grid;
+        gap: 0.4rem;
+      }
+
+      .type-options label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0;
+      }
+
+      .type-options input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+      }
+
+      .danger {
+        background: #991b1b;
+      }
+
+      .danger:hover {
+        background: #7f1d1d;
+      }
+
+      @media print {
+        body {
+          background: #fff;
+          color: #000;
+        }
+
+        .actions,
+        .no-print {
+          display: none !important;
+        }
+
+        .card {
+          background: #fff;
+          border-color: #ddd;
+          break-inside: avoid;
+        }
+
+        .tag,
+        .small {
+          color: #111;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>On Call Schedule</h1>
+      <p class="small">
+        Monthly 7-person rotating schedule with weekly Tue/Wed pairing and
+        automatic return-day make-up for missed on-call shifts.
+      </p>
+
+      <section class="card no-print">
+        <div class="grid">
+          <div>
+            <label for="month">Month</label>
+            <select id="month"></select>
+          </div>
+          <div>
+            <label for="year">Year</label>
+            <input id="year" type="number" min="2000" max="2100" />
+          </div>
+          <div>
+            <label for="rolling-start">Rolling Start Date</label>
+            <input id="rolling-start" type="date" />
+          </div>
+          <div>
+            <label for="resume-state">Resume Previous Run</label>
+            <select id="resume-state">
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="card no-print">
+        <h2>Employees (7)</h2>
+        <div class="grid" id="employee-grid"></div>
+      </section>
+
+      <section class="card no-print">
+        <h2>Absence Rules</h2>
+        <p class="small">
+          Add ranges for each employee using the type dropdown checkboxes (PTO,
+          Unavailable).
+        </p>
+
+        <div class="inline-grid">
+          <div>
+            <label for="absence-employee">Employee</label>
+            <select id="absence-employee"></select>
+          </div>
+          <div>
+            <label>Type</label>
+            <div class="type-picker">
+              <details id="type-dropdown">
+                <summary id="type-summary">Select type(s)</summary>
+                <div class="type-options">
+                  <label><input id="type-pto" type="checkbox" /> PTO</label>
+                  <label><input id="type-unavailable" type="checkbox" /> Unavailable</label>
+                </div>
+              </details>
+            </div>
+          </div>
+          <div>
+            <label for="absence-start">Start Date</label>
+            <input id="absence-start" type="date" />
+          </div>
+          <div>
+            <label for="absence-end">End Date</label>
+            <input id="absence-end" type="date" />
+          </div>
+          <div>
+            <button id="add-absence" type="button">Add Absence</button>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Type</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="absence-body"></tbody>
+        </table>
+      </section>
+
+      <section class="card no-print">
+        <button id="generate" type="button">Generate Schedule</button>
+        <p id="error" class="error"></p>
+      </section>
+
+      <section class="card" id="schedule-section">
+        <div class="grid no-print">
+          <div>
+            <label for="view-mode">View</label>
+            <select id="view-mode">
+              <option value="list">List</option>
+              <option value="calendar">Calendar (Monthly)</option>
+            </select>
+          </div>
+        </div>
+        <div class="actions no-print">
+          <button id="print-pdf" type="button">Print / Save as PDF</button>
+          <button id="export-word" type="button">Export to Word (.doc)</button>
+        </div>
+        <h2 id="schedule-title">Schedule</h2>
+        <table id="list-view">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Day</th>
+              <th>On Call</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="schedule-body"></tbody>
+        </table>
+        <div id="calendar-view" style="display: none"></div>
+      </section>
+    </div>
+
+    <script>
+      const monthSelect = document.getElementById("month");
+      const yearInput = document.getElementById("year");
+      const employeeGrid = document.getElementById("employee-grid");
+      const absenceEmployeeSelect = document.getElementById("absence-employee");
+      const typePto = document.getElementById("type-pto");
+      const typeUnavailable = document.getElementById("type-unavailable");
+      const typeSummary = document.getElementById("type-summary");
+      const absenceStartInput = document.getElementById("absence-start");
+      const absenceEndInput = document.getElementById("absence-end");
+      const rollingStartInput = document.getElementById("rolling-start");
+      const resumeStateSelect = document.getElementById("resume-state");
+      const absenceBody = document.getElementById("absence-body");
+      const addAbsenceButton = document.getElementById("add-absence");
+      const scheduleBody = document.getElementById("schedule-body");
+      const listView = document.getElementById("list-view");
+      const calendarView = document.getElementById("calendar-view");
+      const viewModeSelect = document.getElementById("view-mode");
+      const generateButton = document.getElementById("generate");
+      const printPdfButton = document.getElementById("print-pdf");
+      const exportWordButton = document.getElementById("export-word");
+      const errorField = document.getElementById("error");
+      const scheduleTitle = document.getElementById("schedule-title");
+      const employeeCountBadges = new Map();
+
+      const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+      const defaultEmployees = ["Alex", "Blake", "Casey", "Devon", "Emery", "Finley", "Gray"];
+
+      const absences = [];
+      const stateStorageKey = "oncall_schedule_state_v1";
+
+      function isoDate(date) {
+        return date.toISOString().slice(0, 10);
+      }
+
+      function parseDate(dateStr) {
+        const [year, month, day] = dateStr.split("-").map(Number);
+        return new Date(year, month - 1, day);
+      }
+
+      function addDays(date, days) {
+        const next = new Date(date);
+        next.setDate(next.getDate() + days);
+        next.setHours(0, 0, 0, 0);
+        return next;
+      }
+
+      function diffInDays(dateA, dateB) {
+        return Math.floor((dateA - dateB) / (24 * 60 * 60 * 1000));
+      }
+
+      function diffInWeeks(dateA, dateB) {
+        return Math.floor(diffInDays(startOfWeekMonday(dateA), startOfWeekMonday(dateB)) / 7);
+      }
+
+      function startOfWeekMonday(date) {
+        const copy = new Date(date);
+        const day = copy.getDay();
+        const offset = day === 0 ? -6 : 1 - day;
+        copy.setDate(copy.getDate() + offset);
+        copy.setHours(0, 0, 0, 0);
+        return copy;
+      }
+
+      function inRange(date, start, end) {
+        return date >= start && date <= end;
+      }
+
+      function selectedTypes() {
+        const types = [];
+        if (typePto.checked) types.push("PTO");
+        if (typeUnavailable.checked) types.push("Unavailable");
+        return types;
+      }
+
+      function updateTypeSummary() {
+        const types = selectedTypes();
+        typeSummary.textContent = types.length ? types.join(", ") : "Select type(s)";
+      }
+
+      function getEmployees() {
+        return Array.from(employeeGrid.querySelectorAll("input"))
+          .map((input) => input.value.trim())
+          .filter(Boolean);
+      }
+
+      function refreshAbsenceEmployeeOptions() {
+        const names = getEmployees();
+        const previous = absenceEmployeeSelect.value;
+        absenceEmployeeSelect.innerHTML = "";
+        names.forEach((name) => {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          absenceEmployeeSelect.appendChild(option);
+        });
+        if (names.includes(previous)) absenceEmployeeSelect.value = previous;
+
+        employeeCountBadges.forEach((pill, inputId) => {
+          const input = document.getElementById(inputId);
+          if (!input) return;
+          const name = input.value.trim() || "Unassigned";
+          pill.dataset.employee = name;
+        });
+      }
+
+      function renderAbsenceTable() {
+        absenceBody.innerHTML = "";
+
+        if (absences.length === 0) {
+          const row = document.createElement("tr");
+          row.innerHTML = '<td colspan="5" class="small">No absences added.</td>';
+          absenceBody.appendChild(row);
+          return;
+        }
+
+        absences.forEach((entry, index) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${entry.employee}</td>
+            <td>${entry.types.join(", ")}</td>
+            <td>${entry.start}</td>
+            <td>${entry.end}</td>
+            <td><button type="button" class="danger" data-remove="${index}">Remove</button></td>
+          `;
+          absenceBody.appendChild(row);
+        });
+      }
+
+      function employeeUnavailableReasons(employee, date) {
+        const reasons = [];
+        absences.forEach((entry) => {
+          if (entry.employee !== employee) return;
+          if (inRange(date, parseDate(entry.start), parseDate(entry.end))) {
+            entry.types.forEach((type) => reasons.push(type));
+          }
+        });
+        return reasons;
+      }
+
+      function isEmployeeAvailable(employee, date) {
+        return employeeUnavailableReasons(employee, date).length === 0;
+      }
+
+      function assigneeOnDate(date, rows, plannedAssignments = new Map()) {
+        const key = isoDate(date);
+        if (plannedAssignments.has(key)) return plannedAssignments.get(key);
+        for (let i = rows.length - 1; i >= 0; i -= 1) {
+          if (rows[i].date === key) return rows[i].assignee;
+        }
+        return null;
+      }
+
+      function violatesAssignmentRules(employee, date, rows, plannedAssignments = new Map()) {
+        const prevWeek = assigneeOnDate(addDays(date, -7), rows, plannedAssignments);
+        if (prevWeek === employee) return true;
+
+        const prevDate = addDays(date, -1);
+        const prevAssignee = assigneeOnDate(prevDate, rows, plannedAssignments);
+        if (prevAssignee === employee) {
+          const isAllowedTueWedPair = prevDate.getDay() === 2 && date.getDay() === 3;
+          if (!isAllowedTueWedPair) return true;
+        }
+
+        const prev1 = assigneeOnDate(addDays(date, -1), rows, plannedAssignments);
+        const prev2 = assigneeOnDate(addDays(date, -2), rows, plannedAssignments);
+        if (prev1 === employee && prev2 === employee) return true;
+
+        return false;
+      }
+
+      function pickAvailableForward(employees, preferredIndex, date, counts, rows, excludedEmployee = null) {
+        let firstAvailable = null;
+        let minCount = Infinity;
+        for (let i = 0; i < employees.length; i += 1) minCount = Math.min(minCount, counts.get(employees[i]) ?? 0);
+
+        for (let step = 0; step < employees.length; step += 1) {
+          const idx = (preferredIndex + step) % employees.length;
+          if (isEmployeeAvailable(employees[idx], date)) {
+            if (excludedEmployee && employees[idx] === excludedEmployee) continue;
+            if (firstAvailable === null) firstAvailable = { employee: employees[idx], swapped: step !== 0, index: idx };
+            if (violatesAssignmentRules(employees[idx], date, rows)) continue;
+            const employeeCount = counts.get(employees[idx]) ?? 0;
+            if (employeeCount <= minCount) return { employee: employees[idx], swapped: step !== 0, index: idx };
+          }
+        }
+
+        return firstAvailable ?? { employee: "UNASSIGNED", swapped: true, index: -1 };
+      }
+
+      function weeklyTueWedCoverage(preferredIndex, weekStart, employees, rows) {
+        const safePreferredIndex = preferredIndex >= 0 && preferredIndex < employees.length ? preferredIndex : 0;
+        const preferred = employees[safePreferredIndex];
+        const tuesday = addDays(weekStart, 1);
+        const wednesday = addDays(weekStart, 2);
+        const preferredAvailable = isEmployeeAvailable(preferred, tuesday) && isEmployeeAvailable(preferred, wednesday);
+
+        const eligibleIndexes = [];
+        for (let i = 0; i < employees.length; i += 1) {
+          const candidate = employees[i];
+          if (isEmployeeAvailable(candidate, tuesday) && isEmployeeAvailable(candidate, wednesday)) eligibleIndexes.push(i);
+        }
+
+        if (eligibleIndexes.length === 0) return { preferred, actual: "UNASSIGNED", swapped: true };
+
+        let chosenIndex = safePreferredIndex;
+        if (!preferredAvailable) {
+          for (let step = 1; step <= employees.length; step += 1) {
+            const idx = (safePreferredIndex + step) % employees.length;
+            const planned = new Map([[isoDate(tuesday), employees[idx]]]);
+            if (
+              eligibleIndexes.includes(idx) &&
+              !violatesAssignmentRules(employees[idx], tuesday, rows) &&
+              !violatesAssignmentRules(employees[idx], wednesday, rows, planned)
+            ) {
+              chosenIndex = idx;
+              break;
+            }
+          }
+        } else {
+          const planned = new Map([[isoDate(tuesday), preferred]]);
+          if (violatesAssignmentRules(preferred, tuesday, rows) || violatesAssignmentRules(preferred, wednesday, rows, planned)) {
+            for (let step = 1; step <= employees.length; step += 1) {
+              const idx = (safePreferredIndex + step) % employees.length;
+              const alt = employees[idx];
+              const altPlanned = new Map([[isoDate(tuesday), alt]]);
+              if (
+                eligibleIndexes.includes(idx) &&
+                !violatesAssignmentRules(alt, tuesday, rows) &&
+                !violatesAssignmentRules(alt, wednesday, rows, altPlanned)
+              ) {
+                chosenIndex = idx;
+                break;
+              }
+            }
+          }
+        }
+
+        const actual = employees[chosenIndex];
+        return {
+          preferred,
+          actual,
+          swapped: actual !== preferred && !preferredAvailable,
+          balancedShift: actual !== preferred && preferredAvailable,
+        };
+      }
+
+      function firstReturnDate(employee, afterDate, lastDay) {
+        let probe = new Date(afterDate);
+        while (probe <= lastDay) {
+          if (isEmployeeAvailable(employee, probe)) return probe;
+          probe = addDays(probe, 1);
+        }
+        return null;
+      }
+
+      function buildMonthSchedule(year, month, employees, rollingConfig) {
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const weekPairPlans = new Map();
+        const makeUpQueue = [];
+        const startDate = rollingConfig.startDate;
+        const seedDate = rollingConfig.seedDate;
+        const dailySeed = rollingConfig.dailySeed;
+        const seedWeekStart = rollingConfig.seedWeekStart;
+        const weeklySeed = rollingConfig.weeklySeed;
+        const counts = new Map(employees.map((name) => [name, 0]));
+        const startOffset =
+          ((dailySeed + diffInDays(startDate, seedDate) + diffInWeeks(startDate, seedDate)) % employees.length + employees.length) %
+          employees.length;
+        let dailyCursor = startOffset;
+        const weekStarts = [];
+        const weekSeen = new Set();
+        for (let current = new Date(startDate); current <= lastDay; current = addDays(current, 1)) {
+          const weekStart = startOfWeekMonday(current);
+          const key = isoDate(weekStart);
+          if (!weekSeen.has(key)) {
+            weekSeen.add(key);
+            weekStarts.push(weekStart);
+          }
+        }
+
+        let weeklyCursor = 0;
+        const weekOwnerMap = new Map();
+        weekStarts.forEach((weekStart) => {
+          const preferred = employees[weeklyCursor];
+          const tuesday = addDays(weekStart, 1);
+          const wednesday = addDays(weekStart, 2);
+          const preferredAbsent = !isEmployeeAvailable(preferred, tuesday) || !isEmployeeAvailable(preferred, wednesday);
+          const selectedIndex = preferredAbsent ? (weeklyCursor + 1) % employees.length : weeklyCursor;
+          weekOwnerMap.set(isoDate(weekStart), selectedIndex);
+          weeklyCursor = (selectedIndex + 1) % employees.length;
+        });
+
+        const rows = [];
+        const forcedTueWedOwners = new Map();
+        const blockedThursdayOwners = new Map();
+
+        for (let current = new Date(startDate); current <= lastDay; current = addDays(current, 1)) {
+          const currentIso = isoDate(current);
+          const weekday = current.getDay();
+          const weekKey = isoDate(startOfWeekMonday(current));
+
+          let assignee = "";
+          const notes = [];
+          const forcedOwner = forcedTueWedOwners.get(weekKey);
+
+          makeUpQueue.sort((a, b) => a.returnDate.localeCompare(b.returnDate));
+          const queuedIndex = makeUpQueue.findIndex(
+            (item) => item.date <= currentIso && isEmployeeAvailable(item.employee, current) && !violatesAssignmentRules(item.employee, current, rows),
+          );
+
+          if (
+            (weekday === 2 || weekday === 3) &&
+            forcedOwner &&
+            isEmployeeAvailable(forcedOwner, current) &&
+            (weekday === 3 || assigneeOnDate(addDays(current, -1), rows) !== forcedOwner)
+          ) {
+            assignee = forcedOwner;
+            notes.push("Make-up Tue/Wed owner");
+          } else if (queuedIndex >= 0) {
+            const queued = makeUpQueue.splice(queuedIndex, 1)[0];
+            assignee = queued.employee;
+            notes.push(`Auto-return after ${queued.reason}`);
+          } else if (weekday === 2 || weekday === 3) {
+            if (!weekPairPlans.has(weekKey)) {
+              const preferredOwnerIndex = weekOwnerMap.get(weekKey);
+              weekPairPlans.set(weekKey, weeklyTueWedCoverage(preferredOwnerIndex, startOfWeekMonday(current), employees, rows));
+            }
+            const pair = weekPairPlans.get(weekKey);
+            assignee = pair.actual;
+            notes.push("Tue/Wed pair owner");
+            if (pair.swapped) notes.push("Absence swap");
+            if (pair.balancedShift) notes.push("Balance shift");
+
+            const preferredReasons = employeeUnavailableReasons(pair.preferred, current);
+            if (pair.preferred !== pair.actual && preferredReasons.length > 0) {
+              const returnDate = firstReturnDate(pair.preferred, addDays(current, 1), lastDay);
+              if (returnDate) {
+                makeUpQueue.push({
+                  employee: pair.preferred,
+                  date: isoDate(returnDate),
+                  returnDate: isoDate(returnDate),
+                  reason: preferredReasons.join(" + "),
+                });
+              }
+            }
+          } else {
+            const preferredIndex = dailyCursor;
+            const preferredEmployee = employees[preferredIndex];
+            const preferredReasons = employeeUnavailableReasons(preferredEmployee, current);
+            const excludedThursdayOwner = weekday === 4 ? blockedThursdayOwners.get(weekKey) : null;
+            const result = pickAvailableForward(employees, preferredIndex, current, counts, rows, excludedThursdayOwner);
+            const mondayAbsent = weekday === 1 && preferredReasons.length > 0;
+            if (weekday === 1 && preferredReasons.length > 0) {
+              forcedTueWedOwners.set(weekKey, preferredEmployee);
+              notes.push("Absent Monday gets Tue/Wed");
+            }
+            assignee = result.employee;
+            if (mondayAbsent && assignee !== "UNASSIGNED") blockedThursdayOwners.set(weekKey, assignee);
+            if (result.swapped && preferredReasons.length > 0) notes.push("Absence swap");
+
+            if (!mondayAbsent && result.employee !== preferredEmployee && preferredReasons.length > 0) {
+              const returnDate = firstReturnDate(preferredEmployee, addDays(current, 1), lastDay);
+              if (returnDate) {
+                makeUpQueue.push({
+                  employee: preferredEmployee,
+                  date: isoDate(returnDate),
+                  returnDate: isoDate(returnDate),
+                  reason: preferredReasons.join(" + "),
+                });
+              }
+            }
+          }
+
+          if (assignee !== "UNASSIGNED") {
+            const assignedIndex = employees.indexOf(assignee);
+            if (assignedIndex >= 0) {
+              dailyCursor = (assignedIndex + 1) % employees.length;
+              counts.set(assignee, (counts.get(assignee) ?? 0) + 1);
+            }
+          }
+
+          if (assignee !== "UNASSIGNED") {
+            const reasons = employeeUnavailableReasons(assignee, current);
+            if (reasons.length > 0) notes.push(`Blocked (${[...new Set(reasons)].join(" + ")})`);
+          }
+
+          rows.push({ date: currentIso, weekday: weekdayNames[weekday], assignee, notes });
+        }
+
+        const rebalanceCounts = new Map(employees.map((name) => [name, 0]));
+        rows.forEach((row) => {
+          if (rebalanceCounts.has(row.assignee)) rebalanceCounts.set(row.assignee, rebalanceCounts.get(row.assignee) + 1);
+        });
+
+        const isFlexibleRow =
+          (row) =>
+            !row.notes.includes("Tue/Wed pair owner") &&
+            !row.notes.includes("Make-up Tue/Wed owner") &&
+            !row.notes.some((note) => note.startsWith("Auto-return"));
+
+        let guard = 0;
+        while (guard < 200) {
+          guard += 1;
+          const ranked = [...rebalanceCounts.entries()].sort((a, b) => b[1] - a[1]);
+          const [overEmployee, overCount] = ranked[0];
+          const [underEmployee, underCount] = ranked[ranked.length - 1];
+          if (overCount - underCount <= 1) break;
+
+          let moved = false;
+          for (const row of rows) {
+            if (row.assignee !== overEmployee || !isFlexibleRow(row)) continue;
+            const day = parseDate(row.date);
+            if (!isEmployeeAvailable(underEmployee, day)) continue;
+            if (violatesAssignmentRules(underEmployee, day, rows)) continue;
+
+            const nextDay = addDays(day, 1);
+            const nextAssignee = assigneeOnDate(nextDay, rows);
+            const allowsTueWedForward = day.getDay() === 2 && nextDay.getDay() === 3;
+            if (nextAssignee === underEmployee && !allowsTueWedForward) continue;
+
+            const nextWeekSameDay = assigneeOnDate(addDays(day, 7), rows);
+            if (nextWeekSameDay === underEmployee) continue;
+
+            row.assignee = underEmployee;
+            row.notes.push("Balance rebalance");
+            rebalanceCounts.set(overEmployee, rebalanceCounts.get(overEmployee) - 1);
+            rebalanceCounts.set(underEmployee, rebalanceCounts.get(underEmployee) + 1);
+            moved = true;
+            break;
+          }
+
+          if (!moved) break;
+        }
+
+        const nextDate = addDays(lastDay, 1);
+        const nextDailySeed = dailyCursor;
+        const nextWeeklySeed =
+          ((weeklySeed + diffInWeeks(startOfWeekMonday(nextDate), seedWeekStart)) % employees.length + employees.length) %
+          employees.length;
+
+        return {
+          firstDay,
+          rows,
+          nextState: {
+            seedDate: isoDate(nextDate),
+            seedWeekStart: isoDate(startOfWeekMonday(nextDate)),
+            dailySeed: nextDailySeed,
+            weeklySeed: nextWeeklySeed,
+            nextDate: isoDate(nextDate),
+          },
+        };
+      }
+
+      function renderCalendar(rows, year, month) {
+        const byDate = new Map(rows.map((row) => [row.date, row]));
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const offset = firstDay.getDay();
+        const dayHeaders = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+        let html = "<table><thead><tr>";
+        dayHeaders.forEach((d) => {
+          html += `<th>${d}</th>`;
+        });
+        html += "</tr></thead><tbody><tr>";
+
+        for (let i = 0; i < offset; i += 1) html += "<td></td>";
+
+        for (let day = 1; day <= lastDay.getDate(); day += 1) {
+          const date = new Date(year, month, day);
+          const key = isoDate(date);
+          const entry = byDate.get(key);
+          html += `<td><strong>${day}</strong><br/>${entry ? entry.assignee : ""}<br/><span class=\"tag\">${
+            entry ? entry.notes.join(" • ") : ""
+          }</span></td>`;
+          if (date.getDay() === 6 && day !== lastDay.getDate()) html += "</tr><tr>";
+        }
+
+        const trailing = (6 - lastDay.getDay() + 7) % 7;
+        for (let i = 0; i < trailing; i += 1) html += "<td></td>";
+        html += "</tr></tbody></table>";
+        calendarView.innerHTML = html;
+      }
+
+      function loadSavedState() {
+        const raw = localStorage.getItem(stateStorageKey);
+        if (!raw) return null;
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
+      }
+
+      function saveState(state) {
+        localStorage.setItem(stateStorageKey, JSON.stringify(state));
+      }
+
+      function buildExportDocumentBody() {
+        const isCalendar = viewModeSelect.value === "calendar";
+        const content = isCalendar ? calendarView.innerHTML : listView.outerHTML;
+        return `
+          <h1>${scheduleTitle.textContent}</h1>
+          <p>Generated: ${new Date().toLocaleString()}</p>
+          ${content}
+        `;
+      }
+
+      function printSchedule() {
+        errorField.textContent = "";
+        window.print();
+      }
+
+      function exportWordDoc() {
+        errorField.textContent = "";
+        const html = `
+          <html xmlns:o="urn:schemas-microsoft-com:office:office"
+                xmlns:w="urn:schemas-microsoft-com:office:word"
+                xmlns="http://www.w3.org/TR/REC-html40">
+          <head><meta charset="utf-8"><title>${scheduleTitle.textContent}</title></head>
+          <body>${buildExportDocumentBody()}</body>
+          </html>
+        `;
+
+        const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const safeTitle = (scheduleTitle.textContent || "on-call-schedule")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+
+        link.href = url;
+        link.download = `${safeTitle || "on-call-schedule"}.doc`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+
+      function generateSchedule() {
+        errorField.textContent = "";
+        scheduleBody.innerHTML = "";
+
+        const employees = getEmployees();
+        if (employees.length !== 7) {
+          errorField.textContent = "Please provide exactly 7 employee names.";
+          return;
+        }
+
+        const uniqueCount = new Set(employees).size;
+        if (uniqueCount !== employees.length) {
+          errorField.textContent = "Employee names must be unique.";
+          return;
+        }
+
+        const month = Number(monthSelect.value);
+        const year = Number(yearInput.value);
+        if (Number.isNaN(month) || Number.isNaN(year)) {
+          errorField.textContent = "Please select a valid month and year.";
+          return;
+        }
+        if (!rollingStartInput.value) {
+          errorField.textContent = "Please select a rolling start date.";
+          return;
+        }
+
+        refreshAbsenceEmployeeOptions();
+        const savedState = loadSavedState();
+        const selectedStart = parseDate(rollingStartInput.value);
+        const monthFirst = new Date(year, month, 1);
+        const monthLast = new Date(year, month + 1, 0);
+
+        let rollingConfig = {
+          seedDate: selectedStart,
+          seedWeekStart: startOfWeekMonday(selectedStart),
+          dailySeed: 0,
+          weeklySeed: 0,
+          startDate: selectedStart > monthFirst ? selectedStart : monthFirst,
+        };
+
+        if (resumeStateSelect.value === "yes" && savedState?.seedDate) {
+          const resumeDate = parseDate(savedState.nextDate);
+          const resumeSeedDate = parseDate(savedState.seedDate);
+          rollingConfig = {
+            seedDate: resumeSeedDate,
+            seedWeekStart: parseDate(savedState.seedWeekStart),
+            dailySeed: Number(savedState.dailySeed) || 0,
+            weeklySeed: Number(savedState.weeklySeed) || 0,
+            startDate: resumeDate > monthFirst ? resumeDate : monthFirst,
+          };
+        }
+
+        if (rollingConfig.startDate > monthLast) {
+          errorField.textContent = "Nothing to schedule in this month based on the selected start/resume date.";
+          return;
+        }
+
+        const { firstDay, rows, nextState } = buildMonthSchedule(year, month, employees, rollingConfig);
+        saveState(nextState);
+
+        scheduleTitle.textContent = `Schedule: ${firstDay.toLocaleString(undefined, { month: "long", year: "numeric" })}`;
+
+        rows.forEach((entry) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${entry.date}</td>
+            <td>${entry.weekday}</td>
+            <td>${entry.assignee}</td>
+            <td><span class="tag">${entry.notes.join(" • ")}</span></td>
+          `;
+          scheduleBody.appendChild(row);
+        });
+
+        renderCalendar(rows, year, month);
+        const isCalendar = viewModeSelect.value === "calendar";
+        listView.style.display = isCalendar ? "none" : "table";
+        calendarView.style.display = isCalendar ? "block" : "none";
+
+        const counts = new Map(employees.map((name) => [name, 0]));
+        rows.forEach((entry) => {
+          if (counts.has(entry.assignee)) counts.set(entry.assignee, counts.get(entry.assignee) + 1);
+        });
+
+        employeeCountBadges.forEach((pill) => {
+          const employeeName = pill.dataset.employee;
+          const count = counts.get(employeeName) ?? 0;
+          pill.textContent = `${count} on call`;
+        });
+      }
+
+      for (let i = 0; i < 12; i += 1) {
+        const option = document.createElement("option");
+        option.value = String(i);
+        option.textContent = new Date(2026, i, 1).toLocaleString(undefined, { month: "long" });
+        monthSelect.appendChild(option);
+      }
+
+      const now = new Date();
+      monthSelect.value = String(now.getMonth());
+      yearInput.value = String(now.getFullYear());
+      rollingStartInput.value = isoDate(now);
+
+      defaultEmployees.forEach((name, index) => {
+        const wrapper = document.createElement("div");
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        const countPill = document.createElement("span");
+
+        input.id = `employee-${index}`;
+        input.value = name;
+        label.htmlFor = input.id;
+        label.textContent = `Employee ${index + 1}`;
+        countPill.className = "count-pill";
+        countPill.textContent = "0 on call";
+        countPill.dataset.employee = name;
+        employeeCountBadges.set(input.id, countPill);
+        wrapper.className = "employee-row";
+
+        input.addEventListener("input", refreshAbsenceEmployeeOptions);
+
+        wrapper.append(label, countPill, input);
+        employeeGrid.appendChild(wrapper);
+      });
+
+      addAbsenceButton.addEventListener("click", () => {
+        errorField.textContent = "";
+
+        const employee = absenceEmployeeSelect.value;
+        const types = selectedTypes();
+        const start = absenceStartInput.value;
+        const end = absenceEndInput.value;
+
+        if (!employee) {
+          errorField.textContent = "Select an employee for the absence entry.";
+          return;
+        }
+
+        if (types.length === 0) {
+          errorField.textContent = "Select at least one type: PTO or Unavailable.";
+          return;
+        }
+
+        if (!start || !end) {
+          errorField.textContent = "Select both start and end dates for the absence.";
+          return;
+        }
+
+        if (parseDate(start) > parseDate(end)) {
+          errorField.textContent = "Absence end date must be on or after the start date.";
+          return;
+        }
+
+        absences.push({ employee, types, start, end });
+        renderAbsenceTable();
+        generateSchedule();
+      });
+
+      absenceBody.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-remove]");
+        if (!button) return;
+        const index = Number(button.dataset.remove);
+        absences.splice(index, 1);
+        renderAbsenceTable();
+        generateSchedule();
+      });
+
+      typePto.addEventListener("change", updateTypeSummary);
+      typeUnavailable.addEventListener("change", updateTypeSummary);
+      generateButton.addEventListener("click", generateSchedule);
+      viewModeSelect.addEventListener("change", generateSchedule);
+      printPdfButton.addEventListener("click", printSchedule);
+      exportWordButton.addEventListener("click", exportWordDoc);
+
+      refreshAbsenceEmployeeOptions();
+      updateTypeSummary();
+      renderAbsenceTable();
+      generateSchedule();
+    </script>
+  </body>
+</html>
