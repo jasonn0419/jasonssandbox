@@ -126,12 +126,40 @@
         return HEIC_MIME_TYPES.has(file.type) || name.endsWith('.heic') || name.endsWith('.heif');
       };
 
-      const normalizeHeicBlob = async (file) => {
-        if (HEIC_MIME_TYPES.has(file.type)) {
-          return file;
+      const detectMimeFromFtyp = (bytes) => {
+        if (bytes.byteLength < 12) {
+          return null;
         }
 
-        const bytes = await file.arrayBuffer();
+        const brand = String.fromCharCode(
+          bytes[8],
+          bytes[9],
+          bytes[10],
+          bytes[11]
+        ).toLowerCase();
+
+        if (brand === 'mif1' || brand === 'msf1') {
+          return 'image/heif';
+        }
+        if (brand === 'heic' || brand === 'heix' || brand === 'hevc' || brand === 'hevx') {
+          return 'image/heic';
+        }
+        if (brand === 'avif' || brand === 'avis') {
+          return 'image/avif';
+        }
+
+        return null;
+      };
+
+      const normalizeHeicBlob = async (file) => {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const detectedMime = detectMimeFromFtyp(bytes);
+        const normalizedMime = detectedMime || (HEIC_MIME_TYPES.has(file.type) ? file.type : null);
+
+        if (normalizedMime) {
+          return new Blob([bytes], { type: normalizedMime });
+        }
+
         const name = file.name.toLowerCase();
         const mimeType = name.endsWith('.heif') ? 'image/heif' : 'image/heic';
         return new Blob([bytes], { type: mimeType });
@@ -168,6 +196,9 @@
         }
 
         const heicBlob = await normalizeHeicBlob(file);
+        if (heicBlob.type === 'image/avif') {
+          throw new Error('AVIF container detected; this converter currently supports HEIC/HEIF only');
+        }
         const convertedBlob = await heic2any({
           blob: heicBlob,
           toType: 'image/jpeg',
