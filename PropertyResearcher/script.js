@@ -141,8 +141,33 @@ function isBuildingDevelopment(tags = {}) {
   ];
   const proposedValue = String(tags.proposed || "").toLowerCase();
   const combinedTypeText = `${constructionValue} ${proposedValue} ${landuseValue}`.trim();
+  const nameText = String(tags.name || "").toLowerCase();
+  const descriptionText = String(tags.description || "").toLowerCase();
+  const projectLikeNameSignals = [
+    "project",
+    "development",
+    "apartments",
+    "residences",
+    "condo",
+    "tower",
+    "mixed",
+    "plaza",
+    "square",
+    "center",
+    "hotel",
+  ];
+  const projectLikeName = projectLikeNameSignals.some(
+    (token) => nameText.includes(token) || descriptionText.includes(token)
+  );
+  const broadDevelopmentSignal =
+    isUnderConstruction(tags) ||
+    isRecentlyCompleted(tags) ||
+    projectLikeName ||
+    Boolean(tags["building:use"]) ||
+    landuseValue === "residential" ||
+    landuseValue === "commercial";
 
-  if (!isUnderConstruction(tags) && !isRecentlyCompleted(tags)) {
+  if (!broadDevelopmentSignal) {
     return false;
   }
 
@@ -226,6 +251,7 @@ async function fetchNearbyDevelopments(lat, lon, stateName) {
       nwr(around:${radiusMeters},${lat},${lon})["opening_date"];
       nwr(around:${radiusMeters},${lat},${lon})["completion_date"];
       nwr(around:${radiusMeters},${lat},${lon})["end_date"];
+      nwr(around:${radiusMeters},${lat},${lon})["name"~"project|development|apartments|residences|condo|tower|mixed|plaza|square|center|hotel",i];
     );
     out center tags;
   `;
