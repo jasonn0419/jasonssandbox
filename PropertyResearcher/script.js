@@ -1,6 +1,7 @@
 const locationLookup = document.getElementById("locationLookup");
 const lookupBtn = document.getElementById("lookupBtn");
 const countyResult = document.getElementById("countyResult");
+const developmentResults = document.getElementById("developmentResults");
 
 function countyNameFromAddress(address = {}) {
   return address.county || address.city_district || address.state_district || null;
@@ -15,6 +16,112 @@ function cleanCountyName(rawCountyName) {
 
 function searchLink(query) {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+function toRadians(value) {
+  return (value * Math.PI) / 180;
+}
+
+function distanceMiles(lat1, lon1, lat2, lon2) {
+  const earthRadiusMiles = 3958.8;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusMiles * c;
+}
+
+function developmentType(tags = {}) {
+  return tags.construction || tags.building || tags.landuse || tags.proposed || "Unknown";
+}
+
+function developmentSize(tags = {}) {
+  return tags["building:levels"] || tags.height || tags.area || "Not listed";
+}
+
+function completionDate(tags = {}) {
+  return tags.opening_date || tags.opening_hours || tags.completion_date || tags.end_date || "Not listed";
+}
+
+function renderDevelopments(items, stateName, lat, lon) {
+  if (!Array.isArray(items) || items.length === 0) {
+    developmentResults.innerHTML =
+      "<strong>Nearby Development Activity</strong><p>No nearby development records were returned from the public map dataset.</p>";
+    return;
+  }
+
+  const topItems = items
+    .map((item) => {
+      const itemLat = item.lat ?? item.center?.lat;
+      const itemLon = item.lon ?? item.center?.lon;
+      return {
+        ...item,
+        milesAway:
+          typeof itemLat === "number" && typeof itemLon === "number"
+            ? distanceMiles(lat, lon, itemLat, itemLon)
+            : null,
+      };
+    })
+    .sort((a, b) => (a.milesAway ?? 999) - (b.milesAway ?? 999))
+    .slice(0, 8);
+
+  const list = topItems
+    .map((item) => {
+      const tags = item.tags || {};
+      const name = tags.name || "Unnamed development";
+      const type = developmentType(tags);
+      const size = developmentSize(tags);
+      const completion = completionDate(tags);
+      const miles = item.milesAway ? `${item.milesAway.toFixed(2)} mi away` : "distance unavailable";
+      const newsQuery = `${name} ${stateName} development news`;
+
+      return `<li>
+        <strong>${name}</strong><br />
+        Type: ${type} • Size: ${size} • Estimated completion: ${completion} • ${miles}<br />
+        <a href="${searchLink(newsQuery)}" target="_blank" rel="noopener noreferrer">Related news search</a>
+      </li>`;
+    })
+    .join("");
+
+  developmentResults.innerHTML = `
+    <strong>Nearby Development Activity (within ~5 miles)</strong>
+    <ul class="development-list">${list}</ul>
+  `;
+}
+
+async function fetchNearbyDevelopments(lat, lon, stateName) {
+  developmentResults.innerHTML = "<em>Searching nearby development activity...</em>";
+
+  const radiusMeters = 8047; // ~5 miles
+  const overpassQuery = `
+    [out:json][timeout:25];
+    (
+      nwr(around:${radiusMeters},${lat},${lon})["landuse"="construction"];
+      nwr(around:${radiusMeters},${lat},${lon})["building"="construction"];
+      nwr(around:${radiusMeters},${lat},${lon})["construction"];
+      nwr(around:${radiusMeters},${lat},${lon})["proposed"];
+    );
+    out center tags;
+  `;
+
+  try {
+    const response = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: `data=${encodeURIComponent(overpassQuery)}`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Overpass API ${response.status}`);
+    }
+
+    const payload = await response.json();
+    renderDevelopments(payload.elements || [], stateName, lat, lon);
+  } catch (error) {
+    developmentResults.innerHTML = `<strong>Nearby Development Activity</strong><p>Unable to load development data right now (${error.message}).</p>`;
+  }
 }
 
 function renderCountyLinks({ countyName, stateName, latitude, longitude, fullQuery }) {
@@ -85,8 +192,10 @@ async function lookupCounty() {
       longitude: topResult.lon,
       fullQuery: query,
     });
+    fetchNearbyDevelopments(Number(topResult.lat), Number(topResult.lon), state);
   } catch (error) {
     countyResult.textContent = `Lookup failed: ${error.message}`;
+    developmentResults.innerHTML = "<strong>Nearby Development Activity</strong><p>Unable to run lookup due to geocoding error.</p>";
   }
 }
 
