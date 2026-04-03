@@ -67,6 +67,10 @@ function renderDevelopments(items, stateName, lat, lon) {
   }
 
   const topItems = items
+    .filter((item) => {
+      const name = item?.tags?.name?.trim();
+      return Boolean(name);
+    })
     .map((item) => {
       const itemLat = item.lat ?? item.center?.lat;
       const itemLon = item.lon ?? item.center?.lon;
@@ -81,10 +85,16 @@ function renderDevelopments(items, stateName, lat, lon) {
     .sort((a, b) => (a.milesAway ?? 999) - (b.milesAway ?? 999))
     .slice(0, 8);
 
+  if (topItems.length === 0) {
+    developmentResults.innerHTML =
+      "<strong>Nearby Development Activity</strong><p>No named nearby development records were returned from the public map dataset.</p>";
+    return;
+  }
+
   const list = topItems
     .map((item) => {
       const tags = item.tags || {};
-      const name = tags.name || "Unnamed development";
+      const name = tags.name;
       const type = developmentType(tags);
       const size = developmentSize(tags);
       const completion = completionDate(tags);
