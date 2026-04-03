@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Property Research Locator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Property Research Locator</h1>
+      <p>Search a U.S. city or street address to identify county-level research resources.</p>
+    </header>
+
+    <main class="layout">
+      <section class="panel">
+        <h2>Find County Resources</h2>
+        <label for="locationLookup">U.S. city or address</label>
+        <input
+          id="locationLookup"
+          type="text"
+          placeholder="e.g., 200 S Orange Ave, Orlando, FL or 1 Dr Carlton B Goodlett Pl, San Francisco, CA"
+        />
+        <button id="lookupBtn" type="button">Locate County</button>
+
+        <p class="note">
+          This tool uses OpenStreetMap Nominatim geocoding and works for U.S. counties nationwide.
+        </p>
+
+        <div id="countyResult" class="county-result" aria-live="polite">Enter a U.S. location to begin.</div>
+      </section>
+
+      <section class="panel">
+        <h2>How to use</h2>
+        <ol>
+          <li>Search a U.S. city or specific street address.</li>
+          <li>Open the county website to find local department pages.</li>
+          <li>Use county clerk and assessor/appraiser links for records research.</li>
+        </ol>
+      </section>
+    </main>
+
+    <footer>
+      <small>No sample property records are included in this app.</small>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>
