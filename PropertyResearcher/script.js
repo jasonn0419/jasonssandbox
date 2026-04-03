@@ -62,31 +62,39 @@ function developmentAddress(tags = {}) {
 function isBuildingDevelopment(tags = {}) {
   const constructionValue = String(tags.construction || "").toLowerCase();
   const buildingValue = String(tags.building || "").toLowerCase();
+  const proposedValue = String(tags.proposed || "").toLowerCase();
+  const landuseValue = String(tags.landuse || "").toLowerCase();
+  const developmentSignal =
+    buildingValue === "construction" ||
+    landuseValue === "construction" ||
+    Boolean(tags.construction) ||
+    Boolean(tags.proposed) ||
+    Boolean(tags["construction:building"]);
+  const roadLikeSignals = [
+    "road",
+    "highway",
+    "street",
+    "bridge",
+    "sidewalk",
+    "rail",
+    "junction",
+    "intersection",
+  ];
+  const combinedTypeText = `${constructionValue} ${proposedValue} ${landuseValue}`.trim();
 
-  if (tags.highway || constructionValue.includes("road") || constructionValue.includes("highway")) {
+  if (!developmentSignal) {
     return false;
   }
 
-  if (buildingValue && buildingValue !== "no") {
-    return true;
+  if (tags.highway || roadLikeSignals.some((value) => combinedTypeText.includes(value))) {
+    return false;
   }
 
-  const buildingConstructionKeywords = [
-    "apartments",
-    "residential",
-    "commercial",
-    "retail",
-    "office",
-    "hospital",
-    "school",
-    "warehouse",
-    "hotel",
-    "industrial",
-    "house",
-    "dormitory",
-  ];
+  if ((tags.shop || tags.amenity) && !Boolean(tags.construction) && !Boolean(tags.proposed)) {
+    return false;
+  }
 
-  return buildingConstructionKeywords.some((keyword) => constructionValue.includes(keyword));
+  return true;
 }
 
 function renderDevelopments(items, stateName, lat, lon) {
@@ -155,8 +163,9 @@ async function fetchNearbyDevelopments(lat, lon, stateName) {
     [out:json][timeout:25];
     (
       nwr(around:${radiusMeters},${lat},${lon})["building"="construction"];
+      nwr(around:${radiusMeters},${lat},${lon})["landuse"="construction"];
       nwr(around:${radiusMeters},${lat},${lon})["construction"];
-      nwr(around:${radiusMeters},${lat},${lon})["building"];
+      nwr(around:${radiusMeters},${lat},${lon})["proposed"];
     );
     out center tags;
   `;
