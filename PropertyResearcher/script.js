@@ -178,6 +178,24 @@ function isBuildingDevelopment(tags = {}) {
   return true;
 }
 
+function isLooseDevelopmentMatch(tags = {}) {
+  const name = String(tags.name || "").trim();
+  if (!name) {
+    return false;
+  }
+
+  const roadTerms = ["road", "highway", "intersection", "bridge", "sidewalk", "rail"];
+  const combined = `${tags.name || ""} ${tags.description || ""} ${tags.construction || ""} ${tags.proposed || ""}`
+    .toLowerCase()
+    .trim();
+
+  if (tags.highway || roadTerms.some((term) => combined.includes(term))) {
+    return false;
+  }
+
+  return true;
+}
+
 function renderDevelopments(items, stateName, lat, lon) {
   if (!Array.isArray(items) || items.length === 0) {
     developmentResults.innerHTML =
@@ -205,9 +223,29 @@ function renderDevelopments(items, stateName, lat, lon) {
     .slice(0, 15);
 
   if (topItems.length === 0) {
-    developmentResults.innerHTML =
-      "<strong>Nearby Development Activity</strong><p>No named building-development records were returned from the public map dataset.</p>";
-    return;
+    const fallbackItems = items
+      .filter((item) => isLooseDevelopmentMatch(item?.tags || {}))
+      .map((item) => {
+        const itemLat = item.lat ?? item.center?.lat;
+        const itemLon = item.lon ?? item.center?.lon;
+        return {
+          ...item,
+          milesAway:
+            typeof itemLat === "number" && typeof itemLon === "number"
+              ? distanceMiles(lat, lon, itemLat, itemLon)
+              : null,
+        };
+      })
+      .sort((a, b) => (a.milesAway ?? 999) - (b.milesAway ?? 999))
+      .slice(0, 10);
+
+    if (fallbackItems.length === 0) {
+      developmentResults.innerHTML =
+        "<strong>Nearby Development Activity</strong><p>No named building-development records were returned from the public map dataset.</p>";
+      return;
+    }
+
+    topItems.push(...fallbackItems);
   }
 
   const list = topItems
