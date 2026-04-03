@@ -34,15 +34,53 @@ function distanceMiles(lat1, lon1, lat2, lon2) {
 }
 
 function developmentType(tags = {}) {
-  return tags.construction || tags.building || tags.landuse || tags.proposed || "Unknown";
+  const rawType =
+    tags["building:use"] ||
+    tags.construction ||
+    tags.proposed ||
+    tags["construction:building"] ||
+    tags.building ||
+    null;
+
+  if (!rawType) {
+    return "Not listed";
+  }
+
+  const normalized = String(rawType).toLowerCase();
+  if (["yes", "no", "construction"].includes(normalized)) {
+    return "Not listed";
+  }
+
+  return rawType;
 }
 
 function developmentSize(tags = {}) {
-  return tags["building:levels"] || tags.height || tags.area || "Not listed";
+  const units = tags["residential:units"] || tags.units || tags["building:flats"];
+  if (units) {
+    return `${units} units`;
+  }
+
+  const floorArea = tags["building:floor_area"] || tags.area || tags["gross_floor_area"];
+  if (!floorArea) {
+    return "Not listed";
+  }
+
+  const text = String(floorArea).trim().toLowerCase();
+  const numeric = Number.parseFloat(text.replace(/[^0-9.]/g, ""));
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return String(floorArea);
+  }
+
+  if (text.includes("m2") || text.includes("sqm") || text.includes("sq m")) {
+    const squareFeet = Math.round(numeric * 10.7639);
+    return `~${squareFeet.toLocaleString()} sq ft (estimated)`;
+  }
+
+  return `~${Math.round(numeric).toLocaleString()} sq ft (estimated)`;
 }
 
 function completionDate(tags = {}) {
-  return tags.opening_date || tags.opening_hours || tags.completion_date || tags.end_date || "Not listed";
+  return tags.opening_date || tags.completion_date || tags.end_date || "Not listed";
 }
 
 function developmentAddress(tags = {}) {
@@ -90,10 +128,6 @@ function isBuildingDevelopment(tags = {}) {
     return false;
   }
 
-  if ((tags.shop || tags.amenity) && !Boolean(tags.construction) && !Boolean(tags.proposed)) {
-    return false;
-  }
-
   return true;
 }
 
@@ -121,7 +155,7 @@ function renderDevelopments(items, stateName, lat, lon) {
       };
     })
     .sort((a, b) => (a.milesAway ?? 999) - (b.milesAway ?? 999))
-    .slice(0, 8);
+    .slice(0, 15);
 
   if (topItems.length === 0) {
     developmentResults.innerHTML =
@@ -143,7 +177,7 @@ function renderDevelopments(items, stateName, lat, lon) {
       return `<li>
         <strong>${name}</strong><br />
         Address: ${address}<br />
-        Type: ${type} • Size: ${size} • Estimated completion: ${completion} • ${miles}<br />
+        Type: ${type} • Estimated size: ${size} • Estimated completion: ${completion} • ${miles}<br />
         <a href="${searchLink(newsQuery)}" target="_blank" rel="noopener noreferrer">Related news search</a>
       </li>`;
     })
@@ -170,22 +204,34 @@ async function fetchNearbyDevelopments(lat, lon, stateName) {
     out center tags;
   `;
 
-  try {
-    const response = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-      body: `data=${encodeURIComponent(overpassQuery)}`,
-    });
+  const overpassEndpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
+  ];
 
-    if (!response.ok) {
-      throw new Error(`Overpass API ${response.status}`);
+  let lastError = null;
+  for (const endpoint of overpassEndpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        body: `data=${encodeURIComponent(overpassQuery)}`,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Overpass API ${response.status}`);
+      }
+
+      const payload = await response.json();
+      renderDevelopments(payload.elements || [], stateName, lat, lon);
+      return;
+    } catch (error) {
+      lastError = error;
     }
-
-    const payload = await response.json();
-    renderDevelopments(payload.elements || [], stateName, lat, lon);
-  } catch (error) {
-    developmentResults.innerHTML = `<strong>Nearby Development Activity</strong><p>Unable to load development data right now (${error.message}).</p>`;
   }
+
+  developmentResults.innerHTML = `<strong>Nearby Development Activity</strong><p>Unable to load development data right now (${lastError?.message || "unknown error"}).</p>`;
 }
 
 function renderCountyLinks({ countyName, stateName, latitude, longitude, fullQuery }) {

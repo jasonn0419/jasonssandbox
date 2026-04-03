@@ -96,7 +96,7 @@
       <ul id="output"></ul>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/heic2any/dist/heic2any.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
     <script>
       const dropzone = document.getElementById('dropzone');
       const fileInput = document.getElementById('fileInput');
@@ -107,6 +107,11 @@
       const setStatus = (message, isError = false) => {
         status.textContent = message;
         status.style.color = isError ? '#c53030' : '#2d3748';
+      };
+
+      const formatErrorMessage = (error) => {
+        const message = error && typeof error.message === 'string' ? error.message.trim() : '';
+        return message || 'Unknown error';
       };
 
       const HEIC_MIME_TYPES = new Set([
@@ -158,6 +163,10 @@
       };
 
       const convertWithHeic2Any = async (file) => {
+        if (typeof heic2any !== 'function') {
+          throw new Error('heic2any library failed to load');
+        }
+
         const heicBlob = await normalizeHeicBlob(file);
         const convertedBlob = await heic2any({
           blob: heicBlob,
@@ -173,7 +182,11 @@
         try {
           jpgBlob = await blobToJpegWithCanvas(file);
         } catch (nativeError) {
-          jpgBlob = await convertWithHeic2Any(file);
+          try {
+            jpgBlob = await convertWithHeic2Any(file);
+          } catch (fallbackError) {
+            throw new Error(`Native decode failed (${formatErrorMessage(nativeError)}); fallback failed (${formatErrorMessage(fallbackError)})`);
+          }
         }
 
         const link = document.createElement('a');
@@ -211,7 +224,7 @@
           setStatus('Done! Click a download link below.');
         } catch (error) {
           console.error(error);
-          setStatus('Conversion failed for this file. Try a different HEIC/HEIF image.', true);
+          setStatus(`Conversion failed: ${formatErrorMessage(error)}`, true);
         }
       };
 
