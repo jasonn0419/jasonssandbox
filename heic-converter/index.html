@@ -109,14 +109,33 @@
         status.style.color = isError ? '#c53030' : '#2d3748';
       };
 
+      const HEIC_MIME_TYPES = new Set([
+        'image/heic',
+        'image/heic-sequence',
+        'image/heif',
+        'image/heif-sequence'
+      ]);
+
       const isHeicFile = (file) => {
         const name = file.name.toLowerCase();
-        return file.type === 'image/heic' || name.endsWith('.heic') || name.endsWith('.heif');
+        return HEIC_MIME_TYPES.has(file.type) || name.endsWith('.heic') || name.endsWith('.heif');
+      };
+
+      const normalizeHeicBlob = async (file) => {
+        if (HEIC_MIME_TYPES.has(file.type)) {
+          return file;
+        }
+
+        const bytes = await file.arrayBuffer();
+        const name = file.name.toLowerCase();
+        const mimeType = name.endsWith('.heif') ? 'image/heif' : 'image/heic';
+        return new Blob([bytes], { type: mimeType });
       };
 
       const convertFile = async (file) => {
+        const heicBlob = await normalizeHeicBlob(file);
         const convertedBlob = await heic2any({
-          blob: file,
+          blob: heicBlob,
           toType: 'image/jpeg',
           quality: 0.9
         });
@@ -150,6 +169,10 @@
 
         setStatus(`Converting ${heicFiles.length} file(s)...`);
 
+        if (window.location.protocol === 'file:') {
+          setStatus('Tip: if conversion fails, run this page from a local server instead of file://', true);
+        }
+
         try {
           for (const file of heicFiles) {
             await convertFile(file);
@@ -157,7 +180,7 @@
           setStatus('Done! Click a download link below.');
         } catch (error) {
           console.error(error);
-          setStatus('Conversion failed. The file might be unsupported.', true);
+          setStatus('Conversion failed. Try serving the page over http://localhost and use a .heic/.heif file.', true);
         }
       };
 
