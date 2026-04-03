@@ -2,7 +2,6 @@ const locationLookup = document.getElementById("locationLookup");
 const lookupBtn = document.getElementById("lookupBtn");
 const countyResult = document.getElementById("countyResult");
 const developmentResults = document.getElementById("developmentResults");
-
 function countyNameFromAddress(address = {}) {
   return address.county || address.city_district || address.state_district || null;
 }
@@ -97,17 +96,39 @@ function developmentAddress(tags = {}) {
   return full || "Not listed";
 }
 
-function isBuildingDevelopment(tags = {}) {
-  const constructionValue = String(tags.construction || "").toLowerCase();
+function parseYear(value) {
+  if (!value) {
+    return null;
+  }
+  const match = String(value).match(/(19|20)\d{2}/);
+  return match ? Number.parseInt(match[0], 10) : null;
+}
+
+function isUnderConstruction(tags = {}) {
   const buildingValue = String(tags.building || "").toLowerCase();
-  const proposedValue = String(tags.proposed || "").toLowerCase();
   const landuseValue = String(tags.landuse || "").toLowerCase();
-  const developmentSignal =
+  return (
     buildingValue === "construction" ||
     landuseValue === "construction" ||
     Boolean(tags.construction) ||
     Boolean(tags.proposed) ||
-    Boolean(tags["construction:building"]);
+    Boolean(tags["construction:building"])
+  );
+}
+
+function isRecentlyCompleted(tags = {}) {
+  const year =
+    parseYear(tags.opening_date) || parseYear(tags.completion_date) || parseYear(tags.end_date) || null;
+  if (!year) {
+    return false;
+  }
+  const currentYear = new Date().getFullYear();
+  return year >= currentYear - 3;
+}
+
+function isBuildingDevelopment(tags = {}) {
+  const constructionValue = String(tags.construction || "").toLowerCase();
+  const landuseValue = String(tags.landuse || "").toLowerCase();
   const roadLikeSignals = [
     "road",
     "highway",
@@ -118,9 +139,10 @@ function isBuildingDevelopment(tags = {}) {
     "junction",
     "intersection",
   ];
+  const proposedValue = String(tags.proposed || "").toLowerCase();
   const combinedTypeText = `${constructionValue} ${proposedValue} ${landuseValue}`.trim();
 
-  if (!developmentSignal) {
+  if (!isUnderConstruction(tags) && !isRecentlyCompleted(tags)) {
     return false;
   }
 
@@ -171,13 +193,14 @@ function renderDevelopments(items, stateName, lat, lon) {
       const size = developmentSize(tags);
       const completion = completionDate(tags);
       const address = developmentAddress(tags);
+      const status = isUnderConstruction(tags) ? "Under construction" : "Recently completed";
       const miles = item.milesAway ? `${item.milesAway.toFixed(2)} mi away` : "distance unavailable";
       const newsQuery = `${name} ${stateName} development news`;
 
       return `<li>
         <strong>${name}</strong><br />
         Address: ${address}<br />
-        Type: ${type} • Estimated size: ${size} • Estimated completion: ${completion} • ${miles}<br />
+        Status: ${status} • Type: ${type} • Estimated size: ${size} • Estimated completion: ${completion} • ${miles}<br />
         <a href="${searchLink(newsQuery)}" target="_blank" rel="noopener noreferrer">Related news search</a>
       </li>`;
     })
@@ -200,6 +223,9 @@ async function fetchNearbyDevelopments(lat, lon, stateName) {
       nwr(around:${radiusMeters},${lat},${lon})["landuse"="construction"];
       nwr(around:${radiusMeters},${lat},${lon})["construction"];
       nwr(around:${radiusMeters},${lat},${lon})["proposed"];
+      nwr(around:${radiusMeters},${lat},${lon})["opening_date"];
+      nwr(around:${radiusMeters},${lat},${lon})["completion_date"];
+      nwr(around:${radiusMeters},${lat},${lon})["end_date"];
     );
     out center tags;
   `;
