@@ -341,15 +341,6 @@ function renderCountyLinks({ countyName, stateName, latitude, longitude, fullQue
       <li><a href="${streetViewHintLink}" target="_blank" rel="noopener noreferrer">Open Address in Google Maps (Street View if available)</a></li>
     </ul>
     <p><strong>Geo-code coordinates:</strong> ${latitude}, ${longitude}</p>
-    <div id="propertyDetails">
-      <strong>Property details</strong>
-      <ul>
-        <li><strong>Units:</strong> View on Property Appraiser page</li>
-        <li><strong>Gross SF:</strong> View on Property Appraiser page</li>
-        <li><strong>Lot size:</strong> View on Property Appraiser page</li>
-        <li><strong>Year built:</strong> View on Property Appraiser page</li>
-      </ul>
-    </div>
   `;
 }
 
