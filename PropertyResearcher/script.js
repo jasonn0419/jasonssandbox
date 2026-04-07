@@ -2,6 +2,20 @@ const locationLookup = document.getElementById("locationLookup");
 const lookupBtn = document.getElementById("lookupBtn");
 const countyResult = document.getElementById("countyResult");
 const developmentResults = document.getElementById("developmentResults");
+const DIRECT_APPRAISER_LINKS = {
+  "Florida|Palm Beach": "https://pbcpao.gov",
+  "Florida|Miami-Dade": "https://www.miamidade.gov/pa",
+  "Florida|Broward": "https://web.bcpa.net",
+  "Florida|Orange": "https://www.ocpafl.org",
+  "Florida|Hillsborough": "https://www.hcpafl.org",
+  "Florida|Duval": "https://www.coj.net/departments/property-appraiser",
+  "Florida|Pinellas": "https://www.pcpao.gov",
+  "Florida|Lee": "https://www.leepa.org",
+  "Florida|Collier": "https://www.collierappraiser.com",
+  "Florida|Polk": "https://www.polkpa.org",
+  "Florida|Sarasota": "https://www.sc-pa.com",
+  "Florida|Leon": "https://www.leonpa.gov",
+};
 function countyNameFromAddress(address = {}) {
   return address.county || address.city_district || address.state_district || null;
 }
@@ -15,6 +29,11 @@ function cleanCountyName(rawCountyName) {
 
 function searchLink(query) {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+function propertyAppraiserLink(countyName, stateName) {
+  const key = `${stateName}|${countyName}`;
+  return DIRECT_APPRAISER_LINKS[key] || "https://publicrecords.netronline.com/";
 }
 
 function toRadians(value) {
@@ -305,7 +324,7 @@ async function fetchNearbyDevelopments(lat, lon, stateName) {
 
 function renderCountyLinks({ countyName, stateName, latitude, longitude, fullQuery }) {
   const countyWebsite = searchLink(`${countyName} County ${stateName} official county website`);
-  const propertyAppraiser = searchLink(`${countyName} County ${stateName} property appraiser official`);
+  const propertyAppraiser = propertyAppraiserLink(countyName, stateName);
   const countyClerk = searchLink(`${countyName} County ${stateName} clerk of court official`);
   const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     `${latitude},${longitude}`
