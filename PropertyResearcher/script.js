@@ -104,37 +104,6 @@ function parseYear(value) {
   return match ? Number.parseInt(match[0], 10) : null;
 }
 
-function formatSquareFeet(rawValue) {
-  if (!rawValue) {
-    return "Not listed";
-  }
-  const text = String(rawValue).trim().toLowerCase();
-  const numeric = Number.parseFloat(text.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-    return String(rawValue);
-  }
-
-  if (text.includes("m2") || text.includes("sqm") || text.includes("sq m")) {
-    return `~${Math.round(numeric * 10.7639).toLocaleString()} sq ft`;
-  }
-
-  return `~${Math.round(numeric).toLocaleString()} sq ft`;
-}
-
-function extractPropertyDetails(tags = {}) {
-  const units = tags["residential:units"] || tags.units || tags["building:flats"] || "Not listed";
-  const grossSF = formatSquareFeet(tags["building:floor_area"] || tags["gross_floor_area"] || tags.area);
-  const lotSize = formatSquareFeet(tags["lot_size"] || tags["site_area"] || tags["land_area"] || tags.plot_area);
-  const yearBuilt =
-    parseYear(tags["building:year_built"]) ||
-    parseYear(tags["year_built"]) ||
-    parseYear(tags.start_date) ||
-    parseYear(tags.opening_date) ||
-    "Not listed";
-
-  return { units, grossSF, lotSize, yearBuilt };
-}
-
 function isUnderConstruction(tags = {}) {
   const buildingValue = String(tags.building || "").toLowerCase();
   const landuseValue = String(tags.landuse || "").toLowerCase();
@@ -353,83 +322,10 @@ function renderCountyLinks({ countyName, stateName, latitude, longitude, fullQue
       <li><a href="${streetViewHintLink}" target="_blank" rel="noopener noreferrer">Open Address in Google Maps (Street View if available)</a></li>
     </ul>
     <p><strong>Geo-code coordinates:</strong> ${latitude}, ${longitude}</p>
-    <div id="propertyDetails"><em>Loading property details...</em></div>
-  `;
-}
-
-async function fetchSubjectPropertyDetails(lat, lon) {
-  const detailsContainer = document.getElementById("propertyDetails");
-  if (!detailsContainer) {
-    return;
-  }
-
-  const query = `
-    [out:json][timeout:25];
-    (
-      way(around:120,${lat},${lon})["building"];
-      relation(around:120,${lat},${lon})["building"];
-      node(around:80,${lat},${lon})["building"];
-    );
-    out center tags;
-  `;
-
-  const overpassEndpoints = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://lz4.overpass-api.de/api/interpreter",
-  ];
-
-  let selectedFeature = null;
-  for (const endpoint of overpassEndpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-        body: `data=${encodeURIComponent(query)}`,
-      });
-      if (!response.ok) {
-        continue;
-      }
-
-      const payload = await response.json();
-      const features = Array.isArray(payload.elements) ? payload.elements : [];
-      if (features.length === 0) {
-        continue;
-      }
-
-      selectedFeature = features
-        .map((feature) => {
-          const fLat = feature.lat ?? feature.center?.lat;
-          const fLon = feature.lon ?? feature.center?.lon;
-          return {
-            ...feature,
-            milesAway:
-              typeof fLat === "number" && typeof fLon === "number" ? distanceMiles(lat, lon, fLat, fLon) : 999,
-          };
-        })
-        .sort((a, b) => a.milesAway - b.milesAway)[0];
-      if (selectedFeature) {
-        break;
-      }
-    } catch (_error) {
-      // Try next endpoint.
-    }
-  }
-
-  if (!selectedFeature) {
-    detailsContainer.innerHTML = "<strong>Property details</strong><p>Not available from public map data.</p>";
-    return;
-  }
-
-  const details = extractPropertyDetails(selectedFeature.tags || {});
-  detailsContainer.innerHTML = `
-    <strong>Property details</strong>
-    <ul>
-      <li><strong>Units:</strong> ${details.units}</li>
-      <li><strong>Gross SF:</strong> ${details.grossSF}</li>
-      <li><strong>Lot size:</strong> ${details.lotSize}</li>
-      <li><strong>Year built:</strong> ${details.yearBuilt}</li>
-    </ul>
+    <div id="propertyDetails">
+      <strong>Property details</strong>
+      <p>Pull these directly from the county property appraiser/assessor site linked above.</p>
+    </div>
   `;
 }
 
@@ -479,7 +375,6 @@ async function lookupCounty() {
       longitude: topResult.lon,
       fullQuery: query,
     });
-    fetchSubjectPropertyDetails(Number(topResult.lat), Number(topResult.lon));
     fetchNearbyDevelopments(Number(topResult.lat), Number(topResult.lon), state);
   } catch (error) {
     countyResult.textContent = `Lookup failed: ${error.message}`;
