@@ -280,16 +280,57 @@
             jsZipLoadPromise = value;
           }
         });
-
-      const ensureLibheifLoaded = () =>
-        ensureLibrary('libheif', LIBHEIF_CDN_URLS, {
-          get current() {
-            return libheifLoadPromise;
-          },
-          set current(value) {
-            libheifLoadPromise = value;
+      const resolveLibheifDecoder = async () => {
+        const directCandidates = [window.libheif, window.libheifwasm, window.LibHeif, window.Module];
+        for (const candidate of directCandidates) {
+          if (candidate && typeof candidate.HeifDecoder === 'function') {
+            return candidate;
           }
-        });
+        }
+
+        const factoryCandidates = [window.libheif, window.libheifwasm, window.LibHeif];
+        for (const factory of factoryCandidates) {
+          if (typeof factory === 'function') {
+            try {
+              const module = await factory();
+              if (module && typeof module.HeifDecoder === 'function') {
+                return module;
+              }
+            } catch {
+              // try next factory candidate
+            }
+          }
+        }
+
+        return null;
+      };
+
+      const ensureLibheifLoaded = async () => {
+        const resolved = await resolveLibheifDecoder();
+        if (resolved) {
+          return resolved;
+        }
+
+        if (!libheifLoadPromise) {
+          libheifLoadPromise = (async () => {
+            for (const url of LIBHEIF_CDN_URLS) {
+              try {
+                await loadScript(url);
+                const decoder = await resolveLibheifDecoder();
+                if (decoder) {
+                  return decoder;
+                }
+              } catch {
+                // try next CDN
+              }
+            }
+
+            throw new Error('Unable to initialize libheif-js decoder from CDN');
+          })();
+        }
+
+        return libheifLoadPromise;
+      };
 
       const isHeicFile = (file) => {
         const name = file.name.toLowerCase();
