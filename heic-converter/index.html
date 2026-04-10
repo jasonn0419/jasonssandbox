@@ -299,19 +299,29 @@
 
         const allBrands = new Set([majorBrand, ...compatibleBrands]);
 
-        const heicBrands = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs']);
-        const heifBrands = new Set(['mif1', 'msf1', 'heif']);
+        const heicSingleBrands = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'hevm']);
+        const heicSequenceBrands = new Set(['heis', 'hevs']);
+        const heifSingleBrands = new Set(['mif1', 'heif']);
+        const heifSequenceBrands = new Set(['msf1']);
         const avifBrands = new Set(['avif', 'avis']);
 
         if ([...allBrands].some((brand) => avifBrands.has(brand))) {
           return 'image/avif';
         }
 
-        if ([...allBrands].some((brand) => heicBrands.has(brand))) {
+        if ([...allBrands].some((brand) => heicSequenceBrands.has(brand))) {
+          return 'image/heic-sequence';
+        }
+
+        if ([...allBrands].some((brand) => heicSingleBrands.has(brand))) {
           return 'image/heic';
         }
 
-        if ([...allBrands].some((brand) => heifBrands.has(brand))) {
+        if ([...allBrands].some((brand) => heifSequenceBrands.has(brand))) {
+          return 'image/heif-sequence';
+        }
+
+        if ([...allBrands].some((brand) => heifSingleBrands.has(brand))) {
           return 'image/heif';
         }
 
@@ -328,7 +338,7 @@
         }
 
         const name = file.name.toLowerCase();
-        const mimeType = name.endsWith('.heif') ? 'image/heif' : 'image/heic';
+        const mimeType = name.endsWith('.heif') ? 'image/heif' : 'image/heic-sequence';
         return new Blob([bytes], { type: mimeType });
       };
 
@@ -337,30 +347,43 @@
       const decodeWithHeic2Any = async (file, toType) => {
         const heic2anyFn = await ensureHeic2AnyLoaded();
 
-        const tryHeic2Any = async (blobSource) =>
-          toSingleBlob(
-            await heic2anyFn({
-              blob: blobSource,
-              toType
-            })
-          );
+        const normalized = await normalizeHeicBlob(file);
+        if (normalized.type === 'image/avif') {
+          throw new Error('AVIF detected. This tool supports HEIC/HEIF only.');
+        }
 
-        try {
-          return await tryHeic2Any(file);
-        } catch (firstError) {
-          const heicBlob = await normalizeHeicBlob(file);
-          if (heicBlob.type === 'image/avif') {
-            throw new Error('AVIF detected. This tool supports HEIC/HEIF only.');
-          }
+        const rawBytes = await file.arrayBuffer();
 
-          try {
-            return await tryHeic2Any(heicBlob);
-          } catch (secondError) {
-            throw new Error(
-              `Unable to decode this HEIC file (${firstError.message || 'first decoder failed'}; ${secondError.message || 'second decoder failed'})`
-            );
+        const blobVariants = [
+          file,
+          normalized,
+          new Blob([rawBytes], { type: 'image/heic' }),
+          new Blob([rawBytes], { type: 'image/heic-sequence' }),
+          new Blob([rawBytes], { type: 'image/heif' }),
+          new Blob([rawBytes], { type: 'image/heif-sequence' })
+        ];
+
+        const attempts = [];
+
+        for (const blobVariant of blobVariants) {
+          for (const multiple of [false, true]) {
+            try {
+              const converted = await heic2anyFn({
+                blob: blobVariant,
+                toType,
+                multiple,
+                quality: 0.92
+              });
+
+              return toSingleBlob(converted);
+            } catch (error) {
+              const msg = error && error.message ? error.message : 'unknown decoder error';
+              attempts.push(`${blobVariant.type || 'unknown-type'}${multiple ? ' multiple' : ''}: ${msg}`);
+            }
           }
         }
+
+        throw new Error(`Unable to decode this HEIC file (${attempts.slice(0, 4).join('; ')})`);
       };
 
       const bitmapFromImageElement = async (blobLike) => {
