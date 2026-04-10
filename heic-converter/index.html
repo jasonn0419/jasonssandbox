@@ -9,6 +9,10 @@
         color-scheme: light dark;
       }
 
+      * {
+        box-sizing: border-box;
+      }
+
       body {
         font-family: Arial, sans-serif;
         margin: 0;
@@ -19,7 +23,7 @@
       }
 
       .container {
-        width: min(680px, 92vw);
+        width: min(880px, 94vw);
         background: #ffffff;
         border-radius: 14px;
         box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
@@ -49,7 +53,8 @@
         background: #ebf8ff;
       }
 
-      #pick {
+      #pick,
+      .btn {
         margin-top: 1rem;
         border: none;
         border-radius: 8px;
@@ -57,7 +62,16 @@
         background: #2b6cb0;
         color: white;
         cursor: pointer;
-        font-size: 1rem;
+        font-size: 0.95rem;
+      }
+
+      .btn {
+        margin-top: 0;
+      }
+
+      .btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
       }
 
       #status {
@@ -66,34 +80,102 @@
         font-weight: 600;
       }
 
-      #output {
+      .actions {
+        margin-top: 0.5rem;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      table {
+        width: 100%;
         margin-top: 1rem;
-        padding-left: 1.25rem;
+        border-collapse: collapse;
+        font-size: 0.92rem;
       }
 
-      #output li {
-        margin-bottom: 0.6rem;
+      th,
+      td {
+        border-bottom: 1px solid #e2e8f0;
+        padding: 0.55rem;
+        text-align: left;
       }
 
-      #output a {
-        color: #2b6cb0;
+      .small {
+        color: #4a5568;
+        font-size: 0.85rem;
+      }
+
+      .badge-ok {
+        color: #276749;
+        font-weight: 600;
+      }
+
+      .badge-warn {
+        color: #9c4221;
+        font-weight: 600;
+      }
+
+      @media (max-width: 720px) {
+        table,
+        thead,
+        tbody,
+        th,
+        td,
+        tr {
+          display: block;
+        }
+
+        thead {
+          display: none;
+        }
+
+        tr {
+          border: 1px solid #e2e8f0;
+          margin-bottom: 0.5rem;
+          border-radius: 8px;
+          padding: 0.3rem;
+        }
+
+        td {
+          border: none;
+          padding: 0.35rem;
+        }
       }
     </style>
   </head>
   <body>
     <main class="container">
       <h1>HEIC to JPG Converter</h1>
-      <p>Drop HEIC files below (or click to choose) to convert them to JPG in your browser.</p>
+      <p>
+        Drag iPhone HEIC/HEIF photos here (or click to choose). The converter automatically aims
+        to keep each JPG within ±20% of the original file size.
+      </p>
 
       <section id="dropzone" aria-label="HEIC dropzone">
         <strong>Drag & drop HEIC files here</strong>
         <div>or</div>
         <button id="pick" type="button">Choose files</button>
-        <input id="fileInput" type="file" accept=".heic,image/heic" multiple hidden />
+        <input id="fileInput" type="file" accept=".heic,.heif,image/heic,image/heif" multiple hidden />
       </section>
 
       <div id="status" aria-live="polite"></div>
-      <ul id="output"></ul>
+
+      <div class="actions">
+        <button class="btn" id="downloadAll" type="button" disabled>Download all as ZIP</button>
+      </div>
+
+      <table id="results" hidden>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Original</th>
+            <th>JPG</th>
+            <th>Size delta</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="resultRows"></tbody>
+      </table>
     </main>
 
     <script>
@@ -101,55 +183,19 @@
       const fileInput = document.getElementById('fileInput');
       const pick = document.getElementById('pick');
       const status = document.getElementById('status');
-      const output = document.getElementById('output');
+      const resultRows = document.getElementById('resultRows');
+      const resultsTable = document.getElementById('results');
+      const downloadAllButton = document.getElementById('downloadAll');
+
       const HEIC2ANY_CDN_URLS = [
         'https://cdn.jsdelivr.net/npm/heic2any/dist/heic2any.min.js',
         'https://unpkg.com/heic2any/dist/heic2any.min.js'
       ];
-      let heic2AnyLoadPromise = null;
 
-      const setStatus = (message, isError = false) => {
-        status.textContent = message;
-        status.style.color = isError ? '#c53030' : '#2d3748';
-      };
-
-      const formatErrorMessage = (error) => {
-        const message = error && typeof error.message === 'string' ? error.message.trim() : '';
-        return message || 'Unknown error';
-      };
-
-      const loadScript = (src) => new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = src;
-        script.async = true;
-        script.onload = resolve;
-        script.onerror = () => reject(new Error(`Failed to load ${src}`));
-        document.head.appendChild(script);
-      });
-
-      const ensureHeic2AnyLoaded = async () => {
-        if (typeof heic2any === 'function') {
-          return heic2any;
-        }
-
-        if (!heic2AnyLoadPromise) {
-          heic2AnyLoadPromise = (async () => {
-            for (const url of HEIC2ANY_CDN_URLS) {
-              try {
-                await loadScript(url);
-                if (typeof heic2any === 'function') {
-                  return heic2any;
-                }
-              } catch (error) {
-                // Try next CDN URL
-              }
-            }
-            throw new Error('Unable to load HEIC conversion library from CDN');
-          })();
-        }
-
-        return heic2AnyLoadPromise;
-      };
+      const JSZIP_CDN_URLS = [
+        'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
+        'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js'
+      ];
 
       const HEIC_MIME_TYPES = new Set([
         'image/heic',
@@ -158,33 +204,89 @@
         'image/heif-sequence'
       ]);
 
+      const convertedItems = [];
+      let heic2AnyLoadPromise = null;
+      let jsZipLoadPromise = null;
+
+      const setStatus = (message, isError = false) => {
+        status.textContent = message;
+        status.style.color = isError ? '#c53030' : '#2d3748';
+      };
+
+      const formatBytes = (bytes) => {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+      };
+
+      const formatPercent = (value) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+
+      const loadScript = (src) =>
+        new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          script.async = true;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error(`Failed to load ${src}`));
+          document.head.appendChild(script);
+        });
+
+      const ensureLibrary = async (globalName, urls, cachePromiseRef) => {
+        if (typeof window[globalName] !== 'undefined') {
+          return window[globalName];
+        }
+
+        if (!cachePromiseRef.current) {
+          cachePromiseRef.current = (async () => {
+            for (const url of urls) {
+              try {
+                await loadScript(url);
+                if (typeof window[globalName] !== 'undefined') {
+                  return window[globalName];
+                }
+              } catch {
+                // try next CDN
+              }
+            }
+            throw new Error(`Unable to load ${globalName} from CDN`);
+          })();
+        }
+
+        return cachePromiseRef.current;
+      };
+
+      const ensureHeic2AnyLoaded = () =>
+        ensureLibrary('heic2any', HEIC2ANY_CDN_URLS, {
+          get current() {
+            return heic2AnyLoadPromise;
+          },
+          set current(value) {
+            heic2AnyLoadPromise = value;
+          }
+        });
+
+      const ensureJsZipLoaded = () =>
+        ensureLibrary('JSZip', JSZIP_CDN_URLS, {
+          get current() {
+            return jsZipLoadPromise;
+          },
+          set current(value) {
+            jsZipLoadPromise = value;
+          }
+        });
+
       const isHeicFile = (file) => {
         const name = file.name.toLowerCase();
         return HEIC_MIME_TYPES.has(file.type) || name.endsWith('.heic') || name.endsWith('.heif');
       };
 
       const detectMimeFromFtyp = (bytes) => {
-        if (bytes.byteLength < 12) {
-          return null;
-        }
+        if (bytes.byteLength < 12) return null;
 
-        const brand = String.fromCharCode(
-          bytes[8],
-          bytes[9],
-          bytes[10],
-          bytes[11]
-        ).toLowerCase();
-
-        if (brand === 'mif1' || brand === 'msf1') {
-          return 'image/heif';
-        }
-        if (brand === 'heic' || brand === 'heix' || brand === 'hevc' || brand === 'hevx') {
-          return 'image/heic';
-        }
-        if (brand === 'avif' || brand === 'avis') {
-          return 'image/avif';
-        }
-
+        const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]).toLowerCase();
+        if (brand === 'mif1' || brand === 'msf1') return 'image/heif';
+        if (brand === 'heic' || brand === 'heix' || brand === 'hevc' || brand === 'hevx') return 'image/heic';
+        if (brand === 'avif' || brand === 'avis') return 'image/avif';
         return null;
       };
 
@@ -202,69 +304,130 @@
         return new Blob([bytes], { type: mimeType });
       };
 
-      const blobToJpegWithCanvas = async (blob) => {
-        const bitmap = await createImageBitmap(blob);
+      const bitmapFromFile = async (file) => {
+        try {
+          return await createImageBitmap(file);
+        } catch {
+          const heic2anyFn = await ensureHeic2AnyLoaded();
+          const heicBlob = await normalizeHeicBlob(file);
+
+          if (heicBlob.type === 'image/avif') {
+            throw new Error('AVIF detected. This tool supports HEIC/HEIF only.');
+          }
+
+          const decodedBlob = await heic2anyFn({
+            blob: heicBlob,
+            toType: 'image/png'
+          });
+          const singleBlob = Array.isArray(decodedBlob) ? decodedBlob[0] : decodedBlob;
+          return createImageBitmap(singleBlob);
+        }
+      };
+
+      const canvasBlob = (canvas, quality) =>
+        new Promise((resolve, reject) => {
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('JPG encoding failed.'));
+                return;
+              }
+              resolve(blob);
+            },
+            'image/jpeg',
+            quality
+          );
+        });
+
+      const encodeNearOriginalSize = async (bitmap, originalSize) => {
         const canvas = document.createElement('canvas');
         canvas.width = bitmap.width;
         canvas.height = bitmap.height;
 
         const context = canvas.getContext('2d');
         if (!context) {
-          bitmap.close();
           throw new Error('Canvas context unavailable.');
         }
+
         context.drawImage(bitmap, 0, 0);
-        bitmap.close();
 
-        return new Promise((resolve, reject) => {
-          canvas.toBlob((jpgBlob) => {
-            if (jpgBlob) {
-              resolve(jpgBlob);
-              return;
-            }
-            reject(new Error('Canvas export failed.'));
-          }, 'image/jpeg', 0.92);
-        });
-      };
+        const minTarget = originalSize * 0.8;
+        const maxTarget = originalSize * 1.2;
 
-      const convertWithHeic2Any = async (file) => {
-        const heic2anyFn = await ensureHeic2AnyLoaded();
+        let low = 0.45;
+        let high = 0.98;
+        let bestBlob = await canvasBlob(canvas, 0.86);
+        let bestDiff = Math.abs(bestBlob.size - originalSize);
 
-        const heicBlob = await normalizeHeicBlob(file);
-        if (heicBlob.type === 'image/avif') {
-          throw new Error('AVIF container detected; this converter currently supports HEIC/HEIF only');
-        }
-        const convertedBlob = await heic2anyFn({
-          blob: heicBlob,
-          toType: 'image/jpeg',
-          quality: 0.92
-        });
-        return Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-      };
+        for (let i = 0; i < 7; i += 1) {
+          const quality = Number(((low + high) / 2).toFixed(3));
+          const attempt = await canvasBlob(canvas, quality);
+          const diff = Math.abs(attempt.size - originalSize);
 
-      const convertFile = async (file) => {
-        let jpgBlob;
+          if (diff < bestDiff) {
+            bestBlob = attempt;
+            bestDiff = diff;
+          }
 
-        try {
-          jpgBlob = await blobToJpegWithCanvas(file);
-        } catch (nativeError) {
-          try {
-            jpgBlob = await convertWithHeic2Any(file);
-          } catch (fallbackError) {
-            throw new Error(`Native decode failed (${formatErrorMessage(nativeError)}); fallback failed (${formatErrorMessage(fallbackError)})`);
+          if (attempt.size >= minTarget && attempt.size <= maxTarget) {
+            bestBlob = attempt;
+            break;
+          }
+
+          if (attempt.size > maxTarget) {
+            high = quality;
+          } else {
+            low = quality;
           }
         }
 
-        const link = document.createElement('a');
-        const baseName = file.name.replace(/\.(heic|heif)$/i, '');
+        return bestBlob;
+      };
 
-        link.href = URL.createObjectURL(jpgBlob);
-        link.download = `${baseName || 'converted'}.jpg`;
-        link.textContent = `Download ${link.download}`;
+      const clearResults = () => {
+        convertedItems.forEach((item) => URL.revokeObjectURL(item.url));
+        convertedItems.length = 0;
+        resultRows.innerHTML = '';
+        resultsTable.hidden = true;
+        downloadAllButton.disabled = true;
+      };
 
-        const item = document.createElement('li');
-        item.appendChild(link);
-        output.appendChild(item);
+      const addResultRow = (originalFile, jpgBlob) => {
+        const baseName = originalFile.name.replace(/\.(heic|heif)$/i, '');
+        const downloadName = `${baseName || 'converted'}.jpg`;
+        const url = URL.createObjectURL(jpgBlob);
+
+        const deltaPercent = ((jpgBlob.size - originalFile.size) / originalFile.size) * 100;
+        const withinRange = Math.abs(deltaPercent) <= 20;
+
+        const item = {
+          originalName: originalFile.name,
+          outputName: downloadName,
+          blob: jpgBlob,
+          url
+        };
+        convertedItems.push(item);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>
+            <div>${originalFile.name}</div>
+            <div class="small">${downloadName}</div>
+          </td>
+          <td>${formatBytes(originalFile.size)}</td>
+          <td>${formatBytes(jpgBlob.size)}</td>
+          <td class="${withinRange ? 'badge-ok' : 'badge-warn'}">${formatPercent(deltaPercent)}</td>
+          <td><button class="btn" type="button">Download</button></td>
+        `;
+
+        tr.querySelector('button').addEventListener('click', () => {
+          const a = document.createElement('a');
+          a.href = item.url;
+          a.download = item.outputName;
+          a.click();
+        });
+
+        resultRows.appendChild(tr);
       };
 
       const handleFiles = async (fileList) => {
@@ -274,7 +437,8 @@
           return;
         }
 
-        output.innerHTML = '';
+        clearResults();
+
         const heicFiles = files.filter(isHeicFile);
         if (!heicFiles.length) {
           setStatus('Please choose HEIC or HEIF files only.', true);
@@ -282,18 +446,83 @@
         }
 
         setStatus(`Converting ${heicFiles.length} file(s)...`);
-        ensureHeic2AnyLoaded().catch(() => {});
 
-        try {
-          for (const file of heicFiles) {
-            await convertFile(file);
+        let convertedCount = 0;
+        let outOfRangeCount = 0;
+
+        for (const file of heicFiles) {
+          try {
+            const bitmap = await bitmapFromFile(file);
+            const jpgBlob = await encodeNearOriginalSize(bitmap, file.size);
+            bitmap.close();
+
+            const deltaPercent = ((jpgBlob.size - file.size) / file.size) * 100;
+            if (Math.abs(deltaPercent) > 20) {
+              outOfRangeCount += 1;
+            }
+
+            addResultRow(file, jpgBlob);
+            convertedCount += 1;
+          } catch (error) {
+            console.error(error);
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${file.name}</td>
+              <td>${formatBytes(file.size)}</td>
+              <td colspan="3" class="badge-warn">Failed: ${error.message || 'Unknown error'}</td>
+            `;
+            resultRows.appendChild(tr);
           }
-          setStatus('Done! Click a download link below.');
-        } catch (error) {
-          console.error(error);
-          setStatus(`Conversion failed: ${formatErrorMessage(error)}`, true);
+        }
+
+        if (convertedCount > 0) {
+          resultsTable.hidden = false;
+          downloadAllButton.disabled = false;
+        }
+
+        if (convertedCount === 0) {
+          setStatus('No files were converted.', true);
+        } else if (outOfRangeCount > 0) {
+          setStatus(
+            `Converted ${convertedCount} file(s). ${outOfRangeCount} file(s) could not be kept within ±20%, but were set as close as possible.`,
+            false
+          );
+        } else {
+          setStatus(`Done! Converted ${convertedCount} file(s), all within ±20% size range.`);
         }
       };
+
+      downloadAllButton.addEventListener('click', async () => {
+        if (!convertedItems.length) return;
+
+        downloadAllButton.disabled = true;
+        setStatus('Preparing ZIP download...');
+
+        try {
+          const JSZipLib = await ensureJsZipLoaded();
+          const zip = new JSZipLib();
+
+          convertedItems.forEach((item) => {
+            zip.file(item.outputName, item.blob);
+          });
+
+          const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+          const zipUrl = URL.createObjectURL(zipBlob);
+
+          const link = document.createElement('a');
+          link.href = zipUrl;
+          link.download = 'converted-jpgs.zip';
+          link.click();
+
+          setTimeout(() => URL.revokeObjectURL(zipUrl), 10000);
+          setStatus(`ZIP ready: downloaded ${convertedItems.length} JPG file(s).`);
+        } catch (error) {
+          console.error(error);
+          setStatus(`ZIP creation failed: ${error.message || 'Unknown error'}`, true);
+        } finally {
+          downloadAllButton.disabled = false;
+        }
+      });
 
       dropzone.addEventListener('dragover', (event) => {
         event.preventDefault();
