@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recipe Idea Finder</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: #f7f8fb;
+        color: #1f2933;
+      }
+
+      .container {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 3rem;
+      }
+
+      h1 {
+        margin: 0 0 0.75rem;
+      }
+
+      .intro {
+        margin: 0 0 1.5rem;
+        color: #4b5563;
+      }
+
+      .card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 14px rgba(17, 24, 39, 0.08);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.8rem;
+      }
+
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+      }
+
+      select,
+      button {
+        width: 100%;
+        padding: 0.55rem;
+        border-radius: 8px;
+        border: 1px solid #ced4da;
+        font-size: 0.95rem;
+      }
+
+      .checkbox-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 0.35rem 1rem;
+      }
+
+      .checkbox-grid label {
+        font-weight: 400;
+        margin: 0;
+      }
+
+      .actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+
+      .actions button {
+        cursor: pointer;
+      }
+
+      #findBtn {
+        background: #2563eb;
+        color: white;
+        border: none;
+      }
+
+      #resetBtn {
+        background: white;
+      }
+
+      .result-item {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 0.9rem;
+        margin-bottom: 0.8rem;
+      }
+
+      .result-item h3 {
+        margin: 0 0 0.4rem;
+      }
+
+      .meta {
+        font-size: 0.9rem;
+        color: #4b5563;
+        margin-bottom: 0.4rem;
+      }
+
+      .pill {
+        display: inline-block;
+        background: #eff6ff;
+        color: #1e40af;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        padding: 0.12rem 0.55rem;
+        margin-right: 0.3rem;
+        margin-bottom: 0.3rem;
+      }
+
+      .empty {
+        color: #6b7280;
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Recipe Idea Finder</h1>
+      <p class="intro">
+        Pick what you have (or what you're craving), then get recipe ideas with links
+        to popular cooking sites.
+      </p>
+
+      <section class="card">
+        <div class="grid">
+          <div>
+            <label for="proteinCategory">Protein category</label>
+            <select id="proteinCategory"></select>
+          </div>
+          <div>
+            <label for="proteinType">Specific protein</label>
+            <select id="proteinType"></select>
+          </div>
+          <div>
+            <label for="grainCategory">Grain category</label>
+            <select id="grainCategory"></select>
+          </div>
+          <div>
+            <label for="grainType">Specific grain</label>
+            <select id="grainType"></select>
+          </div>
+          <div>
+            <label for="veggie">Veggie</label>
+            <select id="veggie"></select>
+          </div>
+          <div>
+            <label for="sauce">Sauce</label>
+            <select id="sauce"></select>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Spices (choose as many as you want)</h2>
+        <div id="spiceContainer" class="checkbox-grid"></div>
+        <div class="actions">
+          <button id="findBtn">Find Recipe Ideas</button>
+          <button id="resetBtn" type="button">Reset</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Recipe ideas</h2>
+        <div id="results" class="empty">No recipe ideas yet — make selections and click “Find Recipe Ideas.”</div>
+      </section>
+    </div>
+
+    <script>
+      const proteinOptions = {
+        Beef: ["Ground Beef", "Steak", "Beef Chuck", "Beef Short Ribs"],
+        Chicken: ["Chicken Breast", "Chicken Thighs", "Whole Chicken", "Ground Chicken"],
+        Pork: ["Pork Chops", "Pork Tenderloin", "Ground Pork", "Pork Shoulder"],
+        Fish: ["White Fish", "Salmon", "Tuna", "Shrimp"],
+        "Plant Protein": ["Tofu", "Tempeh", "Chickpeas", "Lentils"]
+      };
+
+      const grainOptions = {
+        Pasta: ["Spaghetti", "Penne", "Fettuccine", "Orzo"],
+        Rice: ["Jasmine Rice", "Basmati Rice", "Brown Rice", "Arborio Rice"],
+        "Other Grains": ["Quinoa", "Farro", "Couscous", "Barley"]
+      };
+
+      const veggies = [
+        "Broccoli", "Spinach", "Bell Pepper", "Zucchini", "Mushrooms", "Asparagus",
+        "Green Beans", "Cauliflower", "Onion", "Carrots", "Brussels Sprouts", "Kale"
+      ];
+
+      const sauces = [
+        "No Sauce", "Soy Sauce", "Teriyaki", "Marinara", "Alfredo", "Pesto", "BBQ Sauce",
+        "Buffalo Sauce", "Coconut Curry Sauce", "Lemon Butter", "Honey Mustard", "Chimichurri"
+      ];
+
+      const spices = [
+        "Salt", "Black Pepper", "Garlic Powder", "Onion Powder", "Paprika", "Smoked Paprika",
+        "Cayenne", "Red Pepper Flakes", "Chili Powder", "Cumin", "Ground Coriander",
+        "Turmeric", "Cinnamon", "Nutmeg", "Ginger", "Oregano", "Basil", "Thyme", "Rosemary",
+        "Parsley", "Sage", "Bay Leaf", "Mustard Powder", "Italian Seasoning", "Curry Powder"
+      ];
+
+      const recipeIdeas = [
+        {
+          title: "Garlic Soy Beef & Broccoli Bowl",
+          proteinCategory: "Beef",
+          proteinType: "Steak",
+          grainCategory: "Rice",
+          grainType: "Jasmine Rice",
+          veggies: ["Broccoli", "Onion"],
+          sauce: "Soy Sauce",
+          spices: ["Garlic Powder", "Black Pepper", "Red Pepper Flakes"],
+          links: [
+            { label: "Allrecipes Stir-Fry Collection", url: "https://www.allrecipes.com/recipes/17132/main-dish/stir-fry/beef/" },
+            { label: "Serious Eats Beef Stir-Fry Guide", url: "https://www.seriouseats.com/stir-fried-beef-with-broccoli-and-oyster-sauce-recipe" }
+          ]
+        },
+        {
+          title: "Creamy Chicken Penne",
+          proteinCategory: "Chicken",
+          proteinType: "Chicken Breast",
+          grainCategory: "Pasta",
+          grainType: "Penne",
+          veggies: ["Spinach", "Mushrooms"],
+          sauce: "Alfredo",
+          spices: ["Garlic Powder", "Basil", "Black Pepper"],
+          links: [
+            { label: "Food Network Chicken Alfredo", url: "https://www.foodnetwork.com/recipes/food-network-kitchen/chicken-alfredo-recipe-1972749" },
+            { label: "Allrecipes Chicken Penne", url: "https://www.allrecipes.com/recipe/11945/chicken-penne-italiano/" }
+          ]
+        },
+        {
+          title: "Lemon Herb White Fish with Rice",
+          proteinCategory: "Fish",
+          proteinType: "White Fish",
+          grainCategory: "Rice",
+          grainType: "Basmati Rice",
+          veggies: ["Asparagus", "Zucchini"],
+          sauce: "Lemon Butter",
+          spices: ["Paprika", "Thyme", "Parsley"],
+          links: [
+            { label: "BBC Good Food Fish Recipes", url: "https://www.bbcgoodfood.com/recipes/collection/white-fish-recipes" },
+            { label: "NYT Cooking Fish with Lemon", url: "https://cooking.nytimes.com/search?q=white+fish+lemon" }
+          ]
+        },
+        {
+          title: "BBQ Pork & Veggie Grain Bowl",
+          proteinCategory: "Pork",
+          proteinType: "Pork Tenderloin",
+          grainCategory: "Other Grains",
+          grainType: "Quinoa",
+          veggies: ["Bell Pepper", "Onion"],
+          sauce: "BBQ Sauce",
+          spices: ["Smoked Paprika", "Garlic Powder", "Cumin"],
+          links: [
+            { label: "Bon Appétit Pork Tenderloin", url: "https://www.bonappetit.com/ingredient/pork-tenderloin" },
+            { label: "Delish BBQ Pork Ideas", url: "https://www.delish.com/cooking/recipe-ideas/g2863/pork-recipes/" }
+          ]
+        },
+        {
+          title: "Tofu Coconut Curry",
+          proteinCategory: "Plant Protein",
+          proteinType: "Tofu",
+          grainCategory: "Rice",
+          grainType: "Brown Rice",
+          veggies: ["Carrots", "Spinach", "Cauliflower"],
+          sauce: "Coconut Curry Sauce",
+          spices: ["Curry Powder", "Turmeric", "Ginger", "Cumin"],
+          links: [
+            { label: "Minimalist Baker Curry", url: "https://minimalistbaker.com/30-minute-coconut-curry/" },
+            { label: "Cookie and Kate Curry Recipes", url: "https://cookieandkate.com/?s=curry" }
+          ]
+        },
+        {
+          title: "Ground Beef Marinara Spaghetti",
+          proteinCategory: "Beef",
+          proteinType: "Ground Beef",
+          grainCategory: "Pasta",
+          grainType: "Spaghetti",
+          veggies: ["Onion", "Bell Pepper"],
+          sauce: "Marinara",
+          spices: ["Italian Seasoning", "Oregano", "Basil", "Garlic Powder"],
+          links: [
+            { label: "Allrecipes Spaghetti", url: "https://www.allrecipes.com/recipe/158140/spaghetti-sauce-with-ground-beef/" },
+            { label: "Serious Eats Red Sauce", url: "https://www.seriouseats.com/the-best-slow-cooked-italian-american-tomato-sauce-red-sauce-recipe" }
+          ]
+        }
+      ];
+
+      const proteinCategoryEl = document.getElementById("proteinCategory");
+      const proteinTypeEl = document.getElementById("proteinType");
+      const grainCategoryEl = document.getElementById("grainCategory");
+      const grainTypeEl = document.getElementById("grainType");
+      const veggieEl = document.getElementById("veggie");
+      const sauceEl = document.getElementById("sauce");
+      const spiceContainer = document.getElementById("spiceContainer");
+      const resultsEl = document.getElementById("results");
+
+      function populateSelect(selectEl, items) {
+        selectEl.innerHTML = "";
+        const any = document.createElement("option");
+        any.value = "Any";
+        any.textContent = "Any";
+        selectEl.appendChild(any);
+
+        items.forEach((item) => {
+          const option = document.createElement("option");
+          option.value = item;
+          option.textContent = item;
+          selectEl.appendChild(option);
+        });
+      }
+
+      function updateProteinTypes() {
+        const category = proteinCategoryEl.value;
+        const options = category === "Any" ? [] : proteinOptions[category] || [];
+        populateSelect(proteinTypeEl, options);
+      }
+
+      function updateGrainTypes() {
+        const category = grainCategoryEl.value;
+        const options = category === "Any" ? [] : grainOptions[category] || [];
+        populateSelect(grainTypeEl, options);
+      }
+
+      function renderSpices() {
+        spiceContainer.innerHTML = "";
+        spices.forEach((spice) => {
+          const label = document.createElement("label");
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.value = spice;
+          input.name = "spice";
+          label.appendChild(input);
+          label.appendChild(document.createTextNode(" " + spice));
+          spiceContainer.appendChild(label);
+        });
+      }
+
+      function getSelectedSpices() {
+        return [...document.querySelectorAll('input[name="spice"]:checked')].map((el) => el.value);
+      }
+
+      function matchesFilter(recipe, selected) {
+        const proteinCategoryMatch = selected.proteinCategory === "Any" || recipe.proteinCategory === selected.proteinCategory;
+        const proteinTypeMatch = selected.proteinType === "Any" || recipe.proteinType === selected.proteinType;
+        const grainCategoryMatch = selected.grainCategory === "Any" || recipe.grainCategory === selected.grainCategory;
+        const grainTypeMatch = selected.grainType === "Any" || recipe.grainType === selected.grainType;
+        const veggieMatch = selected.veggie === "Any" || recipe.veggies.includes(selected.veggie);
+        const sauceMatch = selected.sauce === "Any" || recipe.sauce === selected.sauce;
+        const spiceMatch = selected.spices.length === 0 || selected.spices.some((spice) => recipe.spices.includes(spice));
+
+        return proteinCategoryMatch && proteinTypeMatch && grainCategoryMatch && grainTypeMatch && veggieMatch && sauceMatch && spiceMatch;
+      }
+
+      function renderResults(recipes, selectedSpices) {
+        if (!recipes.length) {
+          resultsEl.className = "empty";
+          resultsEl.textContent = "No exact matches found. Try broadening your selections (for example, set some fields to Any).";
+          return;
+        }
+
+        resultsEl.className = "";
+        resultsEl.innerHTML = recipes
+          .map((recipe) => {
+            const tags = [
+              recipe.proteinType,
+              recipe.grainType,
+              ...recipe.veggies,
+              recipe.sauce,
+              ...selectedSpices.filter((spice) => recipe.spices.includes(spice))
+            ]
+              .slice(0, 8)
+              .map((tag) => `<span class="pill">${tag}</span>`)
+              .join("");
+
+            const links = recipe.links
+              .map((link) => `<li><a href="${link.url}" target="_blank" rel="noopener noreferrer">${link.label}</a></li>`)
+              .join("");
+
+            return `
+            <article class="result-item">
+              <h3>${recipe.title}</h3>
+              <p class="meta"><strong>Great for:</strong> ${recipe.proteinType} + ${recipe.grainType} + ${recipe.sauce}</p>
+              <div>${tags}</div>
+              <p><strong>Where to find similar recipes:</strong></p>
+              <ul>${links}</ul>
+            </article>`;
+          })
+          .join("");
+      }
+
+      function resetFilters() {
+        proteinCategoryEl.value = "Any";
+        updateProteinTypes();
+        grainCategoryEl.value = "Any";
+        updateGrainTypes();
+        veggieEl.value = "Any";
+        sauceEl.value = "Any";
+        document.querySelectorAll('input[name="spice"]').forEach((input) => {
+          input.checked = false;
+        });
+        resultsEl.className = "empty";
+        resultsEl.textContent = "No recipe ideas yet — make selections and click “Find Recipe Ideas.”";
+      }
+
+      function initialize() {
+        populateSelect(proteinCategoryEl, Object.keys(proteinOptions));
+        populateSelect(grainCategoryEl, Object.keys(grainOptions));
+        populateSelect(veggieEl, veggies);
+        populateSelect(sauceEl, sauces);
+        renderSpices();
+        updateProteinTypes();
+        updateGrainTypes();
+
+        proteinCategoryEl.addEventListener("change", updateProteinTypes);
+        grainCategoryEl.addEventListener("change", updateGrainTypes);
+
+        document.getElementById("findBtn").addEventListener("click", () => {
+          const selected = {
+            proteinCategory: proteinCategoryEl.value,
+            proteinType: proteinTypeEl.value,
+            grainCategory: grainCategoryEl.value,
+            grainType: grainTypeEl.value,
+            veggie: veggieEl.value,
+            sauce: sauceEl.value,
+            spices: getSelectedSpices()
+          };
+
+          const matches = recipeIdeas.filter((recipe) => matchesFilter(recipe, selected));
+          renderResults(matches, selected.spices);
+        });
+
+        document.getElementById("resetBtn").addEventListener("click", resetFilters);
+      }
+
+      initialize();
+    </script>
+  </body>
+</html>
