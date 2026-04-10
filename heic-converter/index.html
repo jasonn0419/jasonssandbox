@@ -197,6 +197,10 @@
         'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js'
       ];
 
+      const LIBHEIF_CDN_URLS = [
+        'https://cdn.jsdelivr.net/npm/libheif-js@1.19.8/libheif-wasm/libheif-bundle.js',
+        'https://unpkg.com/libheif-js@1.19.8/libheif-wasm/libheif-bundle.js'
+      ];
 
       const HEIC_MIME_TYPES = new Set([
         'image/heic',
@@ -208,6 +212,7 @@
       const convertedItems = [];
       let heic2AnyLoadPromise = null;
       let jsZipLoadPromise = null;
+      let libheifLoadPromise = null;
 
       const setStatus = (message, isError = false) => {
         status.textContent = message;
@@ -273,6 +278,16 @@
           },
           set current(value) {
             jsZipLoadPromise = value;
+          }
+        });
+
+      const ensureLibheifLoaded = () =>
+        ensureLibrary('libheif', LIBHEIF_CDN_URLS, {
+          get current() {
+            return libheifLoadPromise;
+          },
+          set current(value) {
+            libheifLoadPromise = value;
           }
         });
 
@@ -479,6 +494,53 @@
         throw lastError || new Error('ImageDecoder decode failed.');
       };
 
+
+      const bitmapFromLibheifJs = async (file) => {
+        const libheif = await ensureLibheifLoaded();
+        if (!libheif || !libheif.HeifDecoder) {
+          throw new Error('libheif decoder unavailable.');
+        }
+
+        const decoder = new libheif.HeifDecoder();
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const images = decoder.decode(bytes);
+
+        if (!images || !images.length) {
+          throw new Error('libheif decode returned no images.');
+        }
+
+        const image = images[0];
+        const width = image.get_width();
+        const height = image.get_height();
+        const output = {
+          width,
+          height,
+          data: new Uint8ClampedArray(width * height * 4)
+        };
+
+        const imageData = await new Promise((resolve, reject) => {
+          image.display(output, (displayData) => {
+            if (!displayData || !displayData.data) {
+              reject(new Error('libheif display failed.'));
+              return;
+            }
+            resolve(displayData);
+          });
+        });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext('2d');
+        if (!context) {
+          throw new Error('Canvas context unavailable.');
+        }
+
+        context.putImageData(new ImageData(imageData.data, width, height), 0, 0);
+        return await createImageBitmap(canvas);
+      };
+
       const bitmapFromFile = async (file) => {
         try {
           return await createImageBitmap(file);
@@ -520,9 +582,17 @@
           const pngBlob = await decodeWithHeic2Any(file, 'image/png');
           return await createImageBitmap(pngBlob);
         } catch {
+          // Continue to next fallback.
+        }
+
+        try {
           const jpegBlob = await decodeWithHeic2Any(file, 'image/jpeg');
           return await createImageBitmap(jpegBlob);
+        } catch {
+          // Continue to next fallback.
         }
+
+        return await bitmapFromLibheifJs(file);
       };
 
       const canvasBlob = (canvas, quality) =>
