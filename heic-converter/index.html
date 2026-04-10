@@ -197,10 +197,6 @@
         'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js'
       ];
 
-      const HEICTO_CDN_URLS = [
-        'https://cdn.jsdelivr.net/npm/heic-to/dist/iife/heic-to.js',
-        'https://unpkg.com/heic-to/dist/iife/heic-to.js'
-      ];
 
       const HEIC_MIME_TYPES = new Set([
         'image/heic',
@@ -212,7 +208,6 @@
       const convertedItems = [];
       let heic2AnyLoadPromise = null;
       let jsZipLoadPromise = null;
-      let heicToLoadPromise = null;
 
       const setStatus = (message, isError = false) => {
         status.textContent = message;
@@ -281,16 +276,6 @@
           }
         });
 
-      const ensureHeicToLoaded = () =>
-        ensureLibrary('heicTo', HEICTO_CDN_URLS, {
-          get current() {
-            return heicToLoadPromise;
-          },
-          set current(value) {
-            heicToLoadPromise = value;
-          }
-        });
-
       const isHeicFile = (file) => {
         const name = file.name.toLowerCase();
         return HEIC_MIME_TYPES.has(file.type) || name.endsWith('.heic') || name.endsWith('.heif');
@@ -344,17 +329,41 @@
           try {
             return await tryHeic2Any(heicBlob);
           } catch (secondError) {
-            const heicToFn = await ensureHeicToLoaded();
-
-            try {
-              const outputType = toType === 'image/png' ? 'image/png' : 'image/jpeg';
-              return await heicToFn({ blob: heicBlob, type: outputType, quality: 0.92 });
-            } catch (thirdError) {
-              throw new Error(
-                `Unable to decode this HEIC file (${firstError.message || 'first decoder failed'}; ${secondError.message || 'second decoder failed'}; ${thirdError.message || 'fallback decoder failed'})`
-              );
-            }
+            throw new Error(
+              `Unable to decode this HEIC file (${firstError.message || 'first decoder failed'}; ${secondError.message || 'second decoder failed'})`
+            );
           }
+        }
+      };
+
+      const bitmapFromImageElement = async (blobLike) => {
+        const url = URL.createObjectURL(blobLike);
+
+        try {
+          const img = await new Promise((resolve, reject) => {
+            const element = new Image();
+            element.onload = () => resolve(element);
+            element.onerror = () => reject(new Error('Image element decode failed.'));
+            element.src = url;
+          });
+
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+
+          if (!canvas.width || !canvas.height) {
+            throw new Error('Image decode produced invalid dimensions.');
+          }
+
+          const context = canvas.getContext('2d');
+          if (!context) {
+            throw new Error('Canvas context unavailable.');
+          }
+
+          context.drawImage(img, 0, 0);
+          return await createImageBitmap(canvas);
+        } finally {
+          URL.revokeObjectURL(url);
         }
       };
 
@@ -362,7 +371,20 @@
         try {
           return await createImageBitmap(file);
         } catch {
-          // Continue to HEIC fallback path below.
+          // Continue to fallback paths below.
+        }
+
+        try {
+          return await bitmapFromImageElement(file);
+        } catch {
+          // Continue to fallback paths below.
+        }
+
+        try {
+          const normalized = await normalizeHeicBlob(file);
+          return await bitmapFromImageElement(normalized);
+        } catch {
+          // Continue to decoder libraries.
         }
 
         try {
