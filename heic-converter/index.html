@@ -304,23 +304,46 @@
         return new Blob([bytes], { type: mimeType });
       };
 
-      const bitmapFromFile = async (file) => {
-        try {
-          return await createImageBitmap(file);
-        } catch {
-          const heic2anyFn = await ensureHeic2AnyLoaded();
-          const heicBlob = await normalizeHeicBlob(file);
+      const toSingleBlob = (value) => (Array.isArray(value) ? value[0] : value);
 
+      const decodeWithHeic2Any = async (file, toType) => {
+        const heic2anyFn = await ensureHeic2AnyLoaded();
+
+        try {
+          return toSingleBlob(
+            await heic2anyFn({
+              blob: file,
+              toType
+            })
+          );
+        } catch {
+          const heicBlob = await normalizeHeicBlob(file);
           if (heicBlob.type === 'image/avif') {
             throw new Error('AVIF detected. This tool supports HEIC/HEIF only.');
           }
 
-          const decodedBlob = await heic2anyFn({
-            blob: heicBlob,
-            toType: 'image/png'
-          });
-          const singleBlob = Array.isArray(decodedBlob) ? decodedBlob[0] : decodedBlob;
-          return createImageBitmap(singleBlob);
+          return toSingleBlob(
+            await heic2anyFn({
+              blob: heicBlob,
+              toType
+            })
+          );
+        }
+      };
+
+      const bitmapFromFile = async (file) => {
+        try {
+          return await createImageBitmap(file);
+        } catch {
+          // Continue to HEIC fallback path below.
+        }
+
+        try {
+          const pngBlob = await decodeWithHeic2Any(file, 'image/png');
+          return await createImageBitmap(pngBlob);
+        } catch {
+          const jpegBlob = await decodeWithHeic2Any(file, 'image/jpeg');
+          return await createImageBitmap(jpegBlob);
         }
       };
 
@@ -473,6 +496,10 @@
             `;
             resultRows.appendChild(tr);
           }
+        }
+
+        if (resultRows.children.length > 0) {
+          resultsTable.hidden = false;
         }
 
         if (convertedCount > 0) {
