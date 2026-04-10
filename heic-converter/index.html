@@ -367,6 +367,68 @@
         }
       };
 
+      const bitmapFromImageDecoder = async (blobLike, preferredType) => {
+        if (typeof ImageDecoder === 'undefined') {
+          throw new Error('ImageDecoder API unavailable.');
+        }
+
+        const typeCandidates = [
+          preferredType,
+          blobLike.type,
+          'image/heic',
+          'image/heif'
+        ].filter(Boolean);
+
+        const bytes = new Uint8Array(await blobLike.arrayBuffer());
+        let lastError = null;
+
+        for (const type of typeCandidates) {
+          let decoder;
+
+          try {
+            decoder = new ImageDecoder({
+              data: bytes,
+              type,
+              preferAnimation: false
+            });
+
+            if (decoder.tracks && decoder.tracks.ready) {
+              await decoder.tracks.ready;
+            }
+
+            const result = await decoder.decode({ frameIndex: 0 });
+            const frame = result.image;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = frame.displayWidth || frame.codedWidth;
+            canvas.height = frame.displayHeight || frame.codedHeight;
+
+            const context = canvas.getContext('2d');
+            if (!context) {
+              frame.close();
+              throw new Error('Canvas context unavailable.');
+            }
+
+            context.drawImage(frame, 0, 0);
+            frame.close();
+            decoder.close();
+
+            return await createImageBitmap(canvas);
+          } catch (error) {
+            lastError = error;
+            if (decoder) {
+              try {
+                decoder.close();
+              } catch {
+                // ignore close errors
+              }
+            }
+          }
+        }
+
+        throw lastError || new Error('ImageDecoder decode failed.');
+      };
+
       const bitmapFromFile = async (file) => {
         try {
           return await createImageBitmap(file);
@@ -381,8 +443,25 @@
         }
 
         try {
-          const normalized = await normalizeHeicBlob(file);
+          return await bitmapFromImageDecoder(file, file.type || 'image/heic');
+        } catch {
+          // Continue to normalized blob fallbacks.
+        }
+
+        let normalized;
+
+        try {
+          normalized = await normalizeHeicBlob(file);
           return await bitmapFromImageElement(normalized);
+        } catch {
+          // Continue to fallback paths below.
+        }
+
+        try {
+          if (!normalized) {
+            normalized = await normalizeHeicBlob(file);
+          }
+          return await bitmapFromImageDecoder(normalized, normalized.type || 'image/heic');
         } catch {
           // Continue to decoder libraries.
         }
