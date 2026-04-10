@@ -282,12 +282,39 @@
       };
 
       const detectMimeFromFtyp = (bytes) => {
-        if (bytes.byteLength < 12) return null;
+        if (bytes.byteLength < 20) return null;
 
-        const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]).toLowerCase();
-        if (brand === 'mif1' || brand === 'msf1') return 'image/heif';
-        if (brand === 'heic' || brand === 'heix' || brand === 'hevc' || brand === 'hevx') return 'image/heic';
-        if (brand === 'avif' || brand === 'avis') return 'image/avif';
+        const readBrand = (offset) =>
+          String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]).toLowerCase();
+
+        const majorBrand = readBrand(8);
+        const compatibleBrands = [];
+
+        for (let offset = 16; offset + 3 < bytes.byteLength && compatibleBrands.length < 8; offset += 4) {
+          const brand = readBrand(offset);
+          if (/^[a-z0-9]{4}$/.test(brand)) {
+            compatibleBrands.push(brand);
+          }
+        }
+
+        const allBrands = new Set([majorBrand, ...compatibleBrands]);
+
+        const heicBrands = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs']);
+        const heifBrands = new Set(['mif1', 'msf1', 'heif']);
+        const avifBrands = new Set(['avif', 'avis']);
+
+        if ([...allBrands].some((brand) => avifBrands.has(brand))) {
+          return 'image/avif';
+        }
+
+        if ([...allBrands].some((brand) => heicBrands.has(brand))) {
+          return 'image/heic';
+        }
+
+        if ([...allBrands].some((brand) => heifBrands.has(brand))) {
+          return 'image/heif';
+        }
+
         return null;
       };
 
