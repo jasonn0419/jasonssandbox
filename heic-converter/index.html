@@ -197,6 +197,11 @@
         'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js'
       ];
 
+      const HEICTO_CDN_URLS = [
+        'https://cdn.jsdelivr.net/npm/heic-to/dist/iife/heic-to.js',
+        'https://unpkg.com/heic-to/dist/iife/heic-to.js'
+      ];
+
       const HEIC_MIME_TYPES = new Set([
         'image/heic',
         'image/heic-sequence',
@@ -207,6 +212,7 @@
       const convertedItems = [];
       let heic2AnyLoadPromise = null;
       let jsZipLoadPromise = null;
+      let heicToLoadPromise = null;
 
       const setStatus = (message, isError = false) => {
         status.textContent = message;
@@ -275,6 +281,16 @@
           }
         });
 
+      const ensureHeicToLoaded = () =>
+        ensureLibrary('heicTo', HEICTO_CDN_URLS, {
+          get current() {
+            return heicToLoadPromise;
+          },
+          set current(value) {
+            heicToLoadPromise = value;
+          }
+        });
+
       const isHeicFile = (file) => {
         const name = file.name.toLowerCase();
         return HEIC_MIME_TYPES.has(file.type) || name.endsWith('.heic') || name.endsWith('.heif');
@@ -309,25 +325,36 @@
       const decodeWithHeic2Any = async (file, toType) => {
         const heic2anyFn = await ensureHeic2AnyLoaded();
 
-        try {
-          return toSingleBlob(
+        const tryHeic2Any = async (blobSource) =>
+          toSingleBlob(
             await heic2anyFn({
-              blob: file,
+              blob: blobSource,
               toType
             })
           );
-        } catch {
+
+        try {
+          return await tryHeic2Any(file);
+        } catch (firstError) {
           const heicBlob = await normalizeHeicBlob(file);
           if (heicBlob.type === 'image/avif') {
             throw new Error('AVIF detected. This tool supports HEIC/HEIF only.');
           }
 
-          return toSingleBlob(
-            await heic2anyFn({
-              blob: heicBlob,
-              toType
-            })
-          );
+          try {
+            return await tryHeic2Any(heicBlob);
+          } catch (secondError) {
+            const heicToFn = await ensureHeicToLoaded();
+
+            try {
+              const outputType = toType === 'image/png' ? 'image/png' : 'image/jpeg';
+              return await heicToFn({ blob: heicBlob, type: outputType, quality: 0.92 });
+            } catch (thirdError) {
+              throw new Error(
+                `Unable to decode this HEIC file (${firstError.message || 'first decoder failed'}; ${secondError.message || 'second decoder failed'}; ${thirdError.message || 'fallback decoder failed'})`
+              );
+            }
+          }
         }
       };
 
