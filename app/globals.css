@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: #f8fafc;
+}
+
+body {
+  background: var(--paper);
+}
+
+.report-page {
+  width: 8.5in;
+  min-height: 11in;
+  background: white;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.12);
+  margin: 0 auto 1rem auto;
+  page-break-after: always;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+  }
+
+  .report-page {
+    width: 100%;
+    box-shadow: none;
+    margin: 0;
+  }
+}
+
+@page {
+  size: Letter portrait;
+  margin: 0.3in;
+}
+
+.report-page {
+  break-after: page;
+}
